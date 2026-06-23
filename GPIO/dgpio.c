@@ -17,87 +17,265 @@
 #include "dgpio.h"
 
 /**
- * @brief .
- * @param cArrServerIP Buffer to store the server IP address.
- * @param size Size of the buffer.
+ * @brief Export Provided GPIO
+ * @param u32Pin pin number
  * @return 0 on success, -1 on failure.
- * @note This function will get the server IP address.
+ * @note This function will export the GPIO
  */
-// Helper function to write data to a system file path
-int8_t i8WriteData(const char *cpPath, const char *cpValue) {
+int iGpioExport(uint32_t u32Pin) {
+    char cBuffer[BUFFER_SIZE] = {INIT_0};
+    int iRetLen = INIT_0, iFd = INIT_0;
 
-    int fd = open(path, O_WRONLY);
-    if (fd == -1) {
-        perror("Failed to open path");
-        return -1;
+    iRetLen = snprintf(cBuffer, sizeof(cBuffer), "%s%s", GPIO_PATH, GPIO_EXPORT_PATH);
+    if (iRetLen <= INIT_0) {
+        return FAILURE;
     }
-    
-    if (write(fd, value, strlen(value)) == -1) {
-        perror("Failed to write to path");
-        close(fd);
-        return -1;
+
+    iFd = open(cBuffer, O_WRONLY);
+    if (iFd < INIT_0) {
+        return FAILURE;
     }
-    
-    close(fd);
-    return 0;
+
+    iRetLen = snprintf(cBuffer, sizeof(cBuffer), "%d", u32Pin);
+    if (iRetLen <= INIT_0) {
+        close(iFd);
+        return FAILURE;
+    }
+
+    if (write(iFd, cBuffer, iRetLen) < INIT_0) {
+        close(iFd);
+        return FAILURE;
+    }
+
+    close(iFd);
+    return SUCCESS;
 }
 
+/**
+ * @brief Unexport Provided GPIO
+ * @param u32Pin pin number
+ * @return 0 on success, -1 on failure.
+ * @note This function will unexport the GPIO
+ */
+int iGpioUnexport(uint32_t u32Pin) {
+    char cBuffer[BUFFER_SIZE] = {INIT_0};
+    int iRetLen = INIT_0, iFd = INIT_0;
 
-
-void udpatepin() {
-
-// Change this to match your physical hardware pin configuration
-    const char *pin = "24"; 
-    char path_buffer[128];
-
-    // 1. Export the GPIO pin to make it available in user space
-    printf("Exporting GPIO %s...\n", pin);
-    write_to_path(GPIO_PATH "/export", pin);
-    usleep(100000); // Small delay to let the OS create sysfs entries
-
-    // 2. Set the pin direction to output ("out")
-    snprintf(path_buffer, sizeof(path_buffer), GPIO_PATH "/gpio%s/direction", pin);
-    printf("Setting direction to out...\n");
-    if (write_to_path(path_buffer, "out") == -1) {
-        goto cleanup;
+    iRetLen = snprintf(cBuffer, sizeof(cBuffer), "%s%s", GPIO_PATH, GPIO_UNEXPORT_PATH);
+    if (iRetLen <= INIT_0) {
+        return FAILURE;
     }
 
-    // Prepare the path to change the digital logic value
-    snprintf(path_buffer, sizeof(path_buffer), GPIO_PATH "/gpio%s/value", pin);
+    iFd = open(cBuffer, O_WRONLY);
+    if (iFd < INIT_0) {
+        return FAILURE;
+    }
 
-    // 3. Set the GPIO pin (Logic High / 1)
-    printf("Setting GPIO %s (HIGH)...\n", pin);
-    write_to_path(path_buffer, "1");
-    sleep(2); // Keep high for 2 seconds
+    iRetLen = snprintf(cBuffer, sizeof(cBuffer), "%d", u32Pin);
+    if (iRetLen <= INIT_0) {
+        close(iFd);
+        return FAILURE;
+    }
 
-    // 4. Clear the GPIO pin (Logic Low / 0)
-    printf("Clearing GPIO %s (LOW)...\n", pin);
-    write_to_path(path_buffer, "0");
-    sleep(2); // Keep low for 2 seconds
+    if (write(iFd, cBuffer, iRetLen) < INIT_0) {
+        close(iFd);
+        return FAILURE;
+    }
 
-cleanup:
-    // 5. Unexport the GPIO pin to clean up resources
-    printf("Unexporting GPIO %s...\n", pin);
-    write_to_path(GPIO_PATH "/unexport", pin);
-
-    return 0;
-
+    close(iFd);
+    return SUCCESS;
 }
 
+/**
+ * @brief Set GPIO Direction
+ * @param u32Pin pin number
+ * @param cpDirection to set as input (read) or output (write)
+ * @return 0 on success, -1 on failure.
+ * @note Set GPIO direction to read or write
+ */
+int iGpioSetDirection(uint32_t u32Pin, const char *cpDirection) {
+    char cBuffer[BUFFER_SIZE] = {INIT_0};
+    int iRetLen = INIT_0, iFd = INIT_0;
 
+    if (cpDirection == NULL) {
+        return FAILURE;
+    }
 
+    iRetLen = snprintf(cBuffer, sizeof(cBuffer), "%s/gpio%d/direction", GPIO_PATH, u32Pin);
+    if (iRetLen <= INIT_0) {
+        return FAILURE;
+    }
 
-int main()
-{
-	if(i8UARTInit() != SUCCESS) {
-		printf("Unable to setup UART\n");
-		return INIT_1;
+    iFd = open(cBuffer, O_WRONLY);
+    if (iFd < INIT_0) {
+        return FAILURE;
+    }
+
+    iRetLen = strlen(cpDirection);
+    if (write(iFd, cpDirection, iRetLen) < INIT_0) {
+        close(iFd);
+        return FAILURE;
+    }
+
+    close(iFd);
+    return SUCCESS;
+}
+
+/**
+ * @brief Write GPIO value
+ * @param u32Pin pin number
+ * @return 0 on success, -1 on failure.
+ * @note Write the GPIO value to 1 or 0
+ */
+int iGpioWriteValue(uint32_t u32Pin, uint8_t u8Value) {
+    char cBuffer[BUFFER_SIZE] = {INIT_0};
+    int iRetLen = INIT_0, iFd = INIT_0;
+    const char *cpValStr = (u8Value == INIT_1) ? GPIO_VALUE_1 : GPIO_VALUE_0;
+
+    iRetLen = snprintf(cBuffer, sizeof(cBuffer), "%s/gpio%d/value", GPIO_PATH, u32Pin);
+    if (iRetLen <= INIT_0) {
+        return FAILURE;
+    }
+
+    iFd = open(cBuffer, O_WRONLY);
+    if (iFd < INIT_0) {
+        return FAILURE;
+    }
+
+    // Writing exactly 1 byte: "1" or "0"
+    if (write(iFd, cpValStr, INIT_1) < INIT_0) {
+        close(iFd);
+        return FAILURE;
+    }
+
+    close(iFd);
+    return SUCCESS;
+}
+
+/**
+ * @brief Read GPIO Value
+ * @param u32Pin pin number
+ * @return 0 or 1 on GPIO state, -1 on failure.
+ * @note Open and read GPIO val from path
+ */
+int iGpioReadValue(uint32_t u32Pin) {
+    char cBuffer[BUFFER_SIZE] = {INIT_0};
+    char cValueChar = '\0';
+    int iRetLen = INIT_0, iFd = INIT_0;
+
+    iRetLen = snprintf(cBuffer, sizeof(cBuffer), "%s/gpio%d/value", GPIO_PATH, u32Pin);
+    if (iRetLen <= INIT_0) {
+        return FAILURE;
+    }
+
+    iFd = open(cBuffer, O_RDONLY);
+    if (iFd < INIT_0) {
+        return FAILURE;
+    }
+
+    if (read(iFd, &cValueChar, INIT_1) < INIT_0) {
+        close(iFd);
+        return FAILURE;
+    }
+
+    close(iFd);
+    return (cValueChar == GPIO_CHECK_1) ? GPIO_RVALUE_1 : GPIO_RVALUE_0;
+}
+
+/**
+ * @brief Set the GPIO
+ * @param u32Pin pin number
+ * @return 0 on success, -1 on failure.
+ * @note Set GPIO HIGH
+ */
+int iSetGPIO(uint32_t u32Pin) {
+	if(iGpioExport(u32Pin) == FAILURE) {
+		printf("Unable to export GPIO %d", u32Pin);
+		return FAILURE;
+	}
+	if(iGpioSetDirection(u32Pin, GPIO_DIR_OUT) == FAILURE) {
+		printf("Unable to set %d GPIO direction", u32Pin);
+		return FAILURE;
+	}
+	if(iGpioWriteValue(u32Pin, SET_GPIO) == FAILURE) {
+		printf("Unable to set %d GPIO", u32Pin);
+		return FAILURE;
+	}
+	if(iGpioUnexport(u32Pin) == FAILURE) {
+		printf("Unable to unexport GPIO %d", u32Pin);
+		return FAILURE;
+	}
+	return SUCCESS;
+}
+
+/**
+ * @brief Clear GPIO
+ * @param u32Pin pin number
+ * @return 0 on success, -1 on failure.
+ * @note Set GPIO LOW
+ */
+int iClearGPIO(uint32_t u32Pin) {
+	if(iGpioExport(u32Pin) == FAILURE) {
+		printf("Unable to export GPIO %d", u32Pin);
+		return FAILURE;
+	}
+	if(iGpioSetDirection(u32Pin, GPIO_DIR_OUT) == FAILURE) {
+		printf("Unable to set %d GPIO direction", u32Pin);
+		return FAILURE;
+	}
+	if(iGpioWriteValue(u32Pin, CLR_GPIO) == FAILURE) {
+		printf("Unable to clear %d GPIO", u32Pin);
+		return FAILURE;
+	}
+	if(iGpioUnexport(u32Pin) == FAILURE) {
+		printf("Unable to unexport GPIO %d", u32Pin);
+		return FAILURE;
+	}
+	return SUCCESS;
+}
+
+/**
+ * @brief Get GPIO value status
+ * @param u32Pin pin number
+ * @return Actual GPIO state 0 or 1, -1 on failure.
+ * @note Read GPIO Value
+ */
+int iGetGPIO(uint32_t u32Pin) {
+	int iRetReadVal = INIT_0;
+
+	if(iGpioExport(u32Pin) == FAILURE) {
+		printf("Unable to export GPIO %d", u32Pin);
+		return FAILURE;
+	}
+	if(iGpioSetDirection(u32Pin, GPIO_DIR_IN) == FAILURE) {
+		printf("Unable to set %d GPIO direction", u32Pin);
+		return FAILURE;
+	}
+	if((iRetReadVal = iGpioReadValue(u32Pin)) == FAILURE) {
+		printf("Unable to read %d GPIO", u32Pin);
+		return FAILURE;
+	}
+	if(iGpioUnexport(u32Pin) == FAILURE) {
+		printf("Unable to unexport GPIO %d", u32Pin);
+		return FAILURE;
+	}
+	return iRetReadVal;
+}
+
+int main() {
+	int iReadState = INIT_M_1;
+	if(iSetGPIO(GPIO_NUM) == FAILURE) {
+		printf("Unable to set GPIO %d", GPIO_NUM);
 	}
 
-	if(i8UARTReadWrite() == FAILURE) {
-		printf("Unable to read/write data over UART\n");
-		close(iSerialPort);
-		return INIT_1;
+	if(iClearGPIO(GPIO_NUM) == FAILURE) {
+		printf("Unable to set GPIO %d", GPIO_NUM);
+	}
+
+	if((iReadState = iGetGPIO(GPIO_NUM)) == FAILURE) {
+		printf("Unable to read GPIO %d", GPIO_NUM);
+	} else {
+		printf("GPIO Val is: %d", iReadState);
 	}
 
 	return SUCCESS;
