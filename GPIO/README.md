@@ -310,3 +310,25 @@ The **sysfs GPIO interface** has been deprecated in newer Linux kernels.
 For modern Linux systems, it is recommended to use the **GPIO Character Device Interface (libgpiod)**.
 
 However, the sysfs interface remains widely used in embedded Linux systems and older BSPs.
+
+---
+
+## Author
+
+**Dhawal Umesh Lad**
+
+Embedded Linux Developer
+
+Expertise:
+
+* UART
+* SPI
+* I2C
+* CAN
+* Yocto
+* OpenWRT
+* Device Drivers
+* BSP Development
+* Embedded Systems
+
+---

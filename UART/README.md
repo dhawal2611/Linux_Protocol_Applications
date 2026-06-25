@@ -6,24 +6,37 @@
 
 ---
 
-# Table of Contents
+## Table of Contents
 
-- UART Overview
-- UART Pins
-- Asynchronous Communication
-- Baud Rates
-- Frame Format
-- Communication Modes
-- Hardware Connections
-- UART Configuration
-- Independent Testing
-- Loopback Testing
-- Building uart_rw
-- Application Testing
-- Troubleshooting
-- Advantages
-- Applications
-
+- [UART (Universal Asynchronous Transmitter Receiver)](#uart-universal-asynchronous-transmitter-receiver)
+- [UART Overview](#uart-overview)
+- [UART Pins](#uart-pins)
+- [Asynchronous Communication](#asynchronous-communication)
+- [Common Baud Rates](#common-baud-rates)
+  - [Baud Rate Formula](#baud-rate-formula)
+- [UART Frame Format](#uart-frame-format)
+- [Communication Modes](#communication-modes)
+  - [Simplex Communication](#1-simplex-communication)
+  - [Duplex Communication](#2-duplex-communication)
+    - [Half Duplex](#half-duplex)
+    - [Full Duplex](#full-duplex)
+- [UART Hardware Connections](#uart-hardware-connections)
+  - [UART1 ↔ UART2](#uart1--uart2)
+- [UART Port Configuration](#uart-port-configuration)
+  - [Explanation](#explanation)
+- [Configure Both UART Ports](#configure-both-uart-ports)
+- [Independent UART Testing](#independent-uart-testing)
+- [Continuous Communication Test](#continuous-communication-test)
+- [UART Loopback Testing](#uart-loopback-testing)
+- [uart_rw Application](#uartrw-application)
+  - [Project Structure](#project-structure)
+  - [Build](#build)
+  - [Run](#run)
+- [Troubleshooting](#troubleshooting)
+- [Advantages of UART](#advantages-of-uart)
+- [Applications](#applications)
+- [Summary](#summary)
+- [Author](#author)
 ---
 
 # UART (Universal Asynchronous Transmitter Receiver)
