@@ -1,7 +1,7 @@
 # I2C Communication (Inter-Integrated Circuit)
 
 <p align="center">
-    <img src="I2C_Communication.png" alt="I2C Communication" width="900">
+    <img src="I2C_Communication.png" alt="I2C Communication" width="100%">
 </p>
 
 ---
@@ -27,46 +27,102 @@
   - [Slave Address](#slave-address)
   - [R/W Bit](#rw-bit)
   - [ACK/NACK Bit](#acknack-bit)
+    - [ACK](#ack)
+    - [NACK](#nack)
   - [DATA Field](#data-field)
   - [STOP](#stop)
 - [Start Condition](#start-condition)
+  - [State](#state)
+  - [Action](#action)
+  - [Timing Representation](#timing-representation)
 - [Stop Condition](#stop-condition)
+  - [State](#state-1)
+  - [Action](#action-1)
+  - [Timing Representation](#timing-representation-1)
 - [Repeated Start Condition](#repeated-start-condition)
+  - [Purpose](#purpose)
+  - [State](#state-2)
+  - [Sequence](#sequence)
+- [Typical Example](#typical-example)
 - [Features](#features)
 - [Clock Stretching](#clock-stretching)
+  - [How Clock Stretching Works](#how-clock-stretching-works)
+  - [Timing Representation](#timing-representation-2)
+  - [Applications](#applications)
 - [Arbitration](#arbitration)
-- [Electrical Characteristics](#electrical-characteristics)
-  - [Pull-up Resistors](#pull-up-resistors)
-  - [Bus Capacitance](#bus-capacitance)
-  - [Rise Time](#rise-time)
-  - [Fall Time](#fall-time)
-  - [PCB Layout Recommendations](#pcb-layout-recommendations)
-  - [Practical Recommendations](#practical-recommendations)
-  - [Design Tips](#design-tips)
+  - [Arbitration Principle](#arbitration-principle)
+  - [Arbitration Example](#arbitration-example)
+  - [Arbitration Timing](#arbitration-timing)
 - [Advantages](#advantages)
+  - [Simple Interface](#simple-interface)
+  - [Supports Multiple Devices](#supports-multiple-devices)
+  - [Address-Based Communication](#address-based-communication)
+  - [Widely Supported](#widely-supported)
+  - [Low Cost](#low-cost)
 - [Disadvantages](#disadvantages)
+  - [Lower Throughput](#lower-throughput)
+  - [Limited Data Size](#limited-data-size)
+  - [Pull-up Resistors Required](#pull-up-resistors-required)
+  - [Bus Capacitance Limitations](#bus-capacitance-limitations)
+  - [More Protocol Overhead](#more-protocol-overhead)
 - [Project Directory Structure](#project-directory-structure)
 - [Building on Generic Linux System](#building-on-generic-linux-system)
+  - [Method 1 : Direct Compilation](#method-1--direct-compilation)
+  - [Method 2 : Using Makefile](#method-2--using-makefile)
+- [Running Application](#running-application)
 - [Linux I2C Utilities](#linux-i2c-utilities)
-- [Testing AHT20 Sensor Using Linux I2C Utilities](#testing-aht20-sensor-using-linux-i2c-utilities)
+  - [Detect Available Devices](#detect-available-devices)
+  - [Reading AHT20 Data](#reading-aht20-data)
+  - [Checking Available Buses](#checking-available-buses)
+- [Electrical Characteristics](#electrical-characteristics)
+- [Pull-up Resistors](#pull-up-resistors)
+  - [Typical Pull-up Values](#typical-pull-up-values)
+  - [Pull-up Selection Considerations](#pull-up-selection-considerations)
+- [Bus Capacitance](#bus-capacitance)
+  - [Maximum Recommended Bus Capacitance](#maximum-recommended-bus-capacitance)
+  - [Sources of Capacitance](#sources-of-capacitance)
+- [Rise Time](#rise-time)
+  - [Rise Time Equation](#rise-time-equation)
+  - [Example Calculation](#example-calculation)
+  - [Maximum Rise Time Limits](#maximum-rise-time-limits)
+- [Fall Time](#fall-time)
+- [PCB Layout Recommendations](#pcb-layout-recommendations)
+- [Practical Recommendations](#practical-recommendations)
+- [Design Tips](#design-tips)
 - [Yocto Integration](#yocto-integration)
 - [Yocto Dependencies](#yocto-dependencies)
+  - [Required Packages](#required-packages)
+  - [What Does i2c-tools Provide?](#what-does-i2c-tools-provide)
 - [Kernel Configuration](#kernel-configuration)
+  - [Generic Kernel Configuration](#generic-kernel-configuration)
+  - [Menuconfig](#menuconfig)
 - [Platform Specific Drivers](#platform-specific-drivers)
+  - [NXP i.MX](#nxp-imx)
+  - [Marvell CN9130](#marvell-cn9130)
+  - [Raspberry Pi](#raspberry-pi)
+  - [STM32](#stm32)
 - [Device Tree Requirements](#device-tree-requirements)
+  - [Adding AHT20](#adding-aht20)
 - [Recipe Integration](#recipe-integration)
-- [i2cbb Recipe](#i2cbb-recipe)
+  - [Directory Layout](#directory-layout)
+- [i2c.bb Recipe](#i2cbb-recipe)
 - [Generic Makefile Support](#generic-makefile-support)
+  - [Install](#install)
 - [Add Application to Image](#add-application-to-image)
 - [Add Layer](#add-layer)
 - [Building](#building)
 - [Deploying](#deploying)
 - [Verifying Application](#verifying-application)
-- [Verify I2C Bus](#verify-i2c-bus)
+  - [Prerequisites](#prerequisites)
 - [Troubleshooting](#troubleshooting)
+  - [No I2C Device Found](#no-i2c-device-found)
+  - [Permission Issues](#permission-issues)
+  - [Busy Bus](#busy-bus)
+  - [Build Failures](#build-failures)
 - [References](#references)
 - [Author](#author)
 - [License](#license)
+- [Happy Learning !!](#happy-learning-)
 
 ---
 
@@ -229,7 +285,7 @@ A typical I2C transaction consists of the following sequence:
 
 ```text
 ┌───────┬─────────────┬─────┬──────────┬─────────┬──────────┬─────────┬──────────┬──────┐
-│ START │ 7/10 Address│ R/W │ ACK/NACK│  DATA   │ ACK/NACK │  DATA   │ ACK/NACK │ STOP │
+│ START │ 7/10 Address│ R/W │ ACK/NACK │  DATA   │ ACK/NACK │  DATA   │ ACK/NACK │ STOP │
 └───────┴─────────────┴─────┴──────────┴─────────┴──────────┴─────────┴──────────┴──────┘
 ```
 
@@ -312,8 +368,6 @@ Bit Value
 Meaning
 
 Receiver accepted data.
-
----
 
 ### NACK
 
@@ -568,8 +622,6 @@ Clock Stretching is a mechanism that allows a slave device to temporarily pause 
 
 This feature ensures reliable communication with slower peripherals.
 
----
-
 ## How Clock Stretching Works
 
 Normally, the Master controls the SCL line and determines the communication speed.
@@ -584,8 +636,6 @@ In such situations:
 4. The Slave releases SCL when it becomes ready.
 5. The Master resumes data transfer.
 
----
-
 ## Timing Representation
 
 ```text
@@ -596,8 +646,6 @@ Slave SCL  :       └──────┘
 Bus SCL    : ──────┐______┌─────────────
                    Stretch
 ```
-
----
 
 ## Applications
 
@@ -626,7 +674,6 @@ Only one Master can actively communicate at a given time.
 
 Arbitration ensures collision-free communication.
 
----
 
 ## Arbitration Principle
 
@@ -638,7 +685,6 @@ The Master immediately stops transmission.
 
 The winning Master continues communication.
 
----
 
 ## Arbitration Example
 
@@ -664,7 +710,6 @@ Master 1 loses arbitration.
 
 Master 2 wins arbitration.
 
----
 
 ## Arbitration Timing
 
@@ -687,7 +732,6 @@ Master2 : Continues communication
 
 I2C provides numerous advantages for embedded applications.
 
----
 
 ## Bi-Directional Communication
 
@@ -695,7 +739,6 @@ Both Master and Slave devices can exchange data.
 
 Communication direction is selected using the R/W bit.
 
----
 
 ## Synchronous Communication
 
@@ -703,7 +746,6 @@ Data transfer is synchronized using the SCL clock.
 
 This eliminates timing drift issues commonly found in asynchronous interfaces.
 
----
 
 ## Serial Transmission
 
@@ -715,7 +757,6 @@ Advantages include:
 * Simplified routing
 * Lower EMI
 
----
 
 ## Multi-Master Support
 
@@ -730,7 +771,6 @@ MCU1
 MCU2
 ```
 
----
 
 ## Multi-Slave Support
 
@@ -747,7 +787,6 @@ Master
    └── AHT20
 ```
 
----
 
 ## Low Hardware Requirement
 
@@ -763,19 +802,16 @@ Advantages:
 
 # Advantages
 
----
 
 ## Simple Interface
 
 Only SDA and SCL signals are required.
 
----
 
 ## Supports Multiple Devices
 
 Several peripherals can be connected simultaneously.
 
----
 
 ## Address-Based Communication
 
@@ -783,7 +819,6 @@ Each slave has a unique address.
 
 No dedicated Chip Select signals are required.
 
----
 
 ## Widely Supported
 
@@ -797,7 +832,6 @@ Examples:
 * DS3231
 * SSD1306
 
----
 
 ## Low Cost
 
@@ -809,7 +843,6 @@ Suitable for compact embedded designs.
 
 # Disadvantages
 
----
 
 ## Lower Throughput
 
@@ -824,7 +857,6 @@ Comparison:
 | SPI      | Tens of Mbps     |
 | QSPI     | Hundreds of Mbps |
 
----
 
 ## Limited Data Size
 
@@ -832,7 +864,6 @@ Data is transmitted in 8-bit frames.
 
 Large data transfers require multiple transactions.
 
----
 
 ## Pull-up Resistors Required
 
@@ -846,7 +877,6 @@ Typical resistor values:
 10kΩ
 ```
 
----
 
 ## Bus Capacitance Limitations
 
@@ -854,7 +884,6 @@ Long traces increase capacitance.
 
 This limits achievable communication speed.
 
----
 
 ## More Protocol Overhead
 
@@ -892,7 +921,6 @@ Directory layout:
 
 # Building on Generic Linux System
 
----
 
 ## Method 1 : Direct Compilation
 
@@ -905,7 +933,6 @@ di2cAHT20.c \
 -o di2c
 ```
 
----
 
 ## Method 2 : Using Makefile
 
@@ -943,9 +970,11 @@ Package:
 i2c-tools
 ```
 
----
 
 ## Detect Available Devices
+
+The Linux **i2c-tools** package provides built-in utilities that can be used to validate I2C communication.
+Scan the I2C bus to identify the slave address assigned to the sensor.
 
 Command
 
@@ -956,16 +985,15 @@ i2cdetect -y 1
 Example Output
 
 ```text
-     0 1 2 3 4 5 6 7 8 9 a b c d e f
-
-00: -- -- -- -- -- -- -- --
-10: -- -- -- -- -- -- -- --
-20: -- -- -- -- -- -- -- --
-30: -- -- -- -- -- -- 38 --
-40: -- -- -- -- -- -- -- --
-50: -- -- -- -- -- -- -- --
-60: -- -- -- -- -- -- -- --
-70: -- -- -- -- -- -- -- --
+     0  1  2  3  4  5  6  7  8  9  a  b  c  d  e  f
+00:                         -- -- -- -- -- -- -- -- 
+10: -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- 
+20: -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- 
+30: -- -- -- -- -- -- -- -- 38 -- -- -- -- -- -- -- 
+40: -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- 
+50: -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- 
+60: -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- 
+70: -- -- -- -- -- -- -- --     
 ```
 
 Detected device:
@@ -976,15 +1004,14 @@ Detected device:
 
 AHT20 Sensor Address.
 
----
 
 ## Reading AHT20 Data
 
-Send measurement command.
+The AHT20 sensor requires a measurement command to be issued before the sensor data can be read. The following command sequence performs the complete transaction:
 
-Wait for conversion.
-
-Read response.
+* Sends the measurement trigger command.
+* Waits 100 ms for the measurement to complete.
+* Reads the 7-byte response from the sensor.
 
 ```bash
 i2ctransfer -y 1 \
@@ -996,16 +1023,12 @@ i2ctransfer -y 1 r7@0x38
 Example Output
 
 ```text
-0x18
-0x80
-0x3A
-0x1D
-0x7B
-0x2A
-0x00
+0x18 0x80 0x3A 0x1D 0x7B 0x2A 0x00
 ```
 
----
+The above command should be executed as a **single command sequence** to ensure that the measurement is triggered, completed, and read successfully.
+
+
 
 ## Checking Available Buses
 
@@ -1061,7 +1084,6 @@ SCL ─────┼──────────── Slave1
          └──────────── Master
 ```
 
----
 
 ## Typical Pull-up Values
 
@@ -1073,7 +1095,6 @@ SCL ─────┼──────────── Slave1
 | 3.4 Mbps  | 470 Ω – 1 kΩ         |
 | 5 Mbps    | Application Specific |
 
----
 
 ## Pull-up Selection Considerations
 
@@ -1119,7 +1140,6 @@ Examples include:
 * Connectors
 * Cable assemblies
 
----
 
 ## Maximum Recommended Bus Capacitance
 
@@ -1131,7 +1151,6 @@ According to the I2C specification:
 
 is the maximum recommended total bus capacitance for Standard and Fast Mode communication.
 
----
 
 ## Sources of Capacitance
 
@@ -1153,7 +1172,6 @@ Rise time is the duration required for the signal voltage to transition from LOW
 
 Slow rise times can lead to communication errors.
 
----
 
 ## Rise Time Equation
 
@@ -1173,7 +1191,6 @@ Rp      = Pull-up Resistance
 Cbus    = Total Bus Capacitance
 ```
 
----
 
 ## Example Calculation
 
@@ -1194,7 +1211,6 @@ Tr ≈ 0.8473 × 4700 × 200×10⁻¹²
 Tr ≈ 0.8 µs
 ```
 
----
 
 ## Maximum Rise Time Limits
 
@@ -1277,7 +1293,6 @@ The steps are generic and work for most Yocto releases including:
 
 The Linux userspace application depends on the Linux I2C subsystem and userspace utilities.
 
----
 
 ## Required Packages
 
@@ -1293,7 +1308,6 @@ Alternatively,
 CORE_IMAGE_EXTRA_INSTALL += "i2c-tools"
 ```
 
----
 
 ## What Does i2c-tools Provide?
 
@@ -1321,7 +1335,6 @@ Useful for:
 
 Ensure Linux kernel support for I2C is enabled.
 
----
 
 ## Generic Kernel Configuration
 
@@ -1330,7 +1343,6 @@ CONFIG_I2C=y
 CONFIG_I2C_CHARDEV=y
 ```
 
----
 
 ## Menuconfig
 
@@ -1351,7 +1363,6 @@ Depending on the processor used.
 
 Examples
 
----
 
 ### NXP i.MX
 
@@ -1359,7 +1370,6 @@ Examples
 CONFIG_I2C_IMX=y
 ```
 
----
 
 ### Marvell CN9130
 
@@ -1367,7 +1377,6 @@ CONFIG_I2C_IMX=y
 CONFIG_I2C_MV64XXX=y
 ```
 
----
 
 ### Raspberry Pi
 
@@ -1375,7 +1384,6 @@ CONFIG_I2C_MV64XXX=y
 CONFIG_I2C_BCM2835=y
 ```
 
----
 
 ### STM32
 
@@ -1399,7 +1407,6 @@ Example
 };
 ```
 
----
 
 ## Adding AHT20
 
@@ -1435,7 +1442,6 @@ meta-custom/
     └── i2c/
 ```
 
----
 
 ## Directory Layout
 
@@ -1520,6 +1526,8 @@ Recipe
 
 ```bitbake
 
+SRC_URI += "file://Makefile"
+
 do_compile()
 {
 
@@ -1528,7 +1536,6 @@ do_compile()
 }
 ```
 
----
 
 ## Install
 
@@ -1553,7 +1560,7 @@ do_install()
 Append package.
 
 ```conf
-IMAGE_INSTALL:append = " i2c"
+IMAGE_INSTALL:append = " di2c"
 ```
 
 ---
@@ -1583,7 +1590,7 @@ source oe-init-build-env
 Build recipe.
 
 ```bash
-bitbake i2c
+bitbake di2c
 ```
 
 Build image.
@@ -1631,65 +1638,6 @@ Run
 ```bash
 di2c
 ```
-
----
-
-# Verifying AHT20 Sensor Using Linux I2C Utilities
-
-The Linux **i2c-tools** package provides built-in utilities that can be used to validate I2C communication and verify the functionality of the AHT20 temperature and humidity sensor.
-
-## Verify I2C Bus to detect AHT20 Sensor
-
-Scan the I2C bus to identify the slave address assigned to the sensor.
-
-```bash
-# Get the slave address
-i2cdetect -y 1
-```
-
-Example Output
-
-```text
-     0 1 2 3 4 5 6 7 8 9 a b c d e f
-
-00: -- -- -- -- -- -- -- --
-10: -- -- -- -- -- -- -- --
-20: -- -- -- -- -- -- -- --
-30: -- -- -- -- -- -- 38 --
-40: -- -- -- -- -- -- -- --
-50: -- -- -- -- -- -- -- --
-60: -- -- -- -- -- -- -- --
-70: -- -- -- -- -- -- -- --
-```
-
-Detected slave address:
-
-```text
-0x38
-```
-
----
-
-## Trigger Measurement and Read Raw Data
-
-The AHT20 sensor requires a measurement command to be issued before the sensor data can be read. The following command sequence performs the complete transaction:
-
-* Sends the measurement trigger command.
-* Waits 100 ms for the measurement to complete.
-* Reads the 7-byte response from the sensor.
-
-```bash
-# Read the hex bytes of AHT20
-i2ctransfer -y 1 w3@0x38 0xAC 0x33 0x00 && sleep 0.1 && i2ctransfer -y 1 r7@0x38
-```
-
-Example Output
-
-```text
-0x18 0x80 0x3A 0x1D 0x7B 0x2A 0x00
-```
-
-The above command should be executed as a **single command sequence** to ensure that the measurement is triggered, completed, and read successfully.
 
 ---
 
