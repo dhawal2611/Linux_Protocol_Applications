@@ -34,6 +34,9 @@
 static int iI2CFd = INIT_0;
 
 // Function Declarations
-
+int iInitI2CDevice(void);
+int iReadI2CData(uint8_t *u8ReadDataBuf, unsigned int uReadSize);
+int iWriteI2CData(uint8_t *u8WriteDataBuf, unsigned int uReadSize);
+void vCloseI2CDevice(void);
 
 #endif // DI2C_H

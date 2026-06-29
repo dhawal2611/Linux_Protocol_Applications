@@ -1380,10 +1380,48 @@ CONFIG_I2C_MV64XXX=y
 
 ### Raspberry Pi
 
+Enable the Raspberry Pi I2C controller in the kernel.
 ```config
 CONFIG_I2C_BCM2835=y
 ```
 
+or Raspberry Pi-based Yocto images, you may also need to enable the I2C hardware interface and automatically load the required kernel modules at boot.
+
+Add the following settings to your machine configuration (for example, `conf/local.conf`, your machine configuration, or a Raspberry Pi-specific configuration file as appropriate for your BSP):
+
+```conf
+# Enable the I2C hardware interface
+ENABLE_I2C = "1"
+
+# Automatically load the I2C kernel modules at boot
+KERNEL_MODULE_AUTOLOAD += "i2c-dev i2c-bcm2835"
+```
+
+After rebuilding and booting the image, verify that the I2C interface is available:
+
+```bash
+ls /dev/i2c*
+```
+
+Expected output:
+
+```text
+/dev/i2c-0
+/dev/i2c-1
+```
+
+You can also verify that the kernel modules are loaded:
+
+```bash
+lsmod | grep i2c
+```
+
+Expected output (example):
+
+```text
+i2c_dev
+i2c_bcm2835
+```
 
 ### STM32
 
