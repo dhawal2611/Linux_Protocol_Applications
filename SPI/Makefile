@@ -1,16 +1,16 @@
-CC      := gcc
-TARGET  := dspiAHT20
+CC      ?= gcc
+TARGET  := dspi
 
 SRCS    := dspi.c \
-           dspiAHT20.c
+           dspiw25qxx.c
 
 OBJS    := $(SRCS:.c=.o)
-CFLAGS  := -Wall -Wextra -O2
+CFLAGS  ?= -Wall -Wextra -O2
 
 all: $(TARGET)
 
 $(TARGET): $(OBJS)
-	$(CC) $(CFLAGS) -o $@ $^
+	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $^
 
 %.o: %.c
 	$(CC) $(CFLAGS) -c $< -o $@
@@ -21,3 +21,4 @@ clean:
 rebuild: clean all
 
 .PHONY: all clean rebuild
+
