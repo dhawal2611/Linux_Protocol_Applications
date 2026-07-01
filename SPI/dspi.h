@@ -6,8 +6,8 @@
  * @copyright   (c) 2026 Lad Dhawal Umesh. All rights reserved.
  */
 
-#ifndef DI2C_H
-#define DI2C_H
+#ifndef DSPI_H
+#define DSPI_H
 
 // Headers
 #include <stdio.h>
@@ -17,6 +17,7 @@
 #include <unistd.h>
 #include <sys/ioctl.h>
 #include <linux/spi/spidev.h>
+
 // MACROS
 #define SUCCESS 0
 #define FAILURE -1
@@ -31,13 +32,15 @@
 
 
 // Global Variables
+int iSPIFd;
 uint8_t mode = SPI_MODE_0; // SPI_MODE_X X=1, 2, 3, 4 modes check datasheet
 uint8_t bits = SPI_BITS;
 uint32_t speed = SPI_SPEED; // 1 MHz
 struct spi_ioc_transfer tr;
-
+uint8_t u8TxBuffer[3] = {0x80, 0x00, 0x00}; 
+uint8_t u8RxBuffer[3] = {0,};
 
 // Function Declarations
 
 
-#endif // DI2C_H
+#endif // DSPI_H

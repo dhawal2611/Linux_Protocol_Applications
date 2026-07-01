@@ -22,42 +22,43 @@
  * @note This function will export the GPIO
  */
 int iInitSPIDevice(void) {
-  
-  if ((iI2CFd = open(SPI_DEVICE, O_RDWR)) < INIT_0) {
+  if ((iSPIFd = open(SPI_DEVICE, O_RDWR)) < INIT_0) {
         perror("Failed to open the SPI bus");
         return FAILURE;
    }
   
-   if (ioctl(fd, SPI_IOC_WR_MODE, &mode) < INIT_0) {
+   if (ioctl(iSPIFd, SPI_IOC_WR_MODE, &mode) < INIT_0) {
         perror("Failed to configure to the slave device");
-        close(iI2CFd);
+        close(iSPIFd);
         return FAILURE;
    }
-   if (ioctl(fd, SPI_IOC_WR_BITS_PER_WORD, &bits) < INIT_0) {
+   if (ioctl(iSPIFd, SPI_IOC_WR_BITS_PER_WORD, &bits) < INIT_0) {
         perror("Failed to configure to the slave device");
-        close(iI2CFd);
+        close(iSPIFd);
         return FAILURE;
    }
-   if (ioctl(fd, SPI_IOC_WR_MAX_SPEED_HZ, &speed) < INIT_0) {
+   if (ioctl(iSPIFd, SPI_IOC_WR_MAX_SPEED_HZ, &speed) < INIT_0) {
         perror("Failed to configure to the slave device");
-        close(iI2CFd);
+        close(iSPIFd);
         return FAILURE;
    }
    
-   tr = {
-        .tx_buf = (unsigned long)tx_buffer,
-        .rx_buf = (unsigned long)rx_buffer,
-        .len = 3,
-        .delay_usecs = 0,
-        .speed_hz = speed,
-        .bits_per_word = bits,
-    };
+       tr.tx_buf = (unsigned long)u8TxBuffer;
+       tr.rx_buf = (unsigned long)u8RxBuffer;
+       tr.len = 3;
+       tr.delay_usecs = 0;
+       tr.speed_hz = SPI_SPEED;
+       tr.bits_per_word = bits;
+   if (ioctl(iSPIFd, SPI_IOC_MESSAGE(1), &tr) < 0) {
+        perror("Error: SPI transfer failed");
+        return -1;
+    }
     return SUCCESS;  
 }
 
 // Performs a full-duplex SPI transfer (simultaneous read and write)
-int iSPITransfer(int fd, uint8_t *tx_buf, uint8_t *rx_buf, size_t length) {
-    struct spi_ioc_transfer tr = {
+/*int iSPITransfer(int iFd, uint8_t *tx_buf, uint8_t *rx_buf, size_t length) {
+    struct spi_ioc_transfer tr1 = {
         .tx_buf = (unsigned long)tx_buf,
         .rx_buf = (unsigned long)rx_buf,
         .len = length,
@@ -67,14 +68,45 @@ int iSPITransfer(int fd, uint8_t *tx_buf, uint8_t *rx_buf, size_t length) {
     };
 
     // SPI_IOC_MESSAGE(1) tells ioctl to execute 1 transfer struct
-    if (ioctl(fd, SPI_IOC_MESSAGE(1), &tr) < 0) {
+    if (ioctl(iFd, SPI_IOC_MESSAGE(1), &tr1) < 0) {
         perror("Error: SPI transfer failed");
         return -1;
     }
     return 0;
-}
+}*/
 
 void vCloseSPIDevice(void) {
     // Clean up file descriptor
-    close(iSPIFd);
+    //close(iSPIFd);
 }
+
+int main() {
+  
+
+    // 4. Set up the transfer structure
+    /*tr = {
+        .tx_buf = (unsigned long)u8TxBuffer,
+        .rx_buf = (unsigned long)u8RxBuffer,
+        .len = 3,
+        .delay_usecs = 0,
+        .speed_hz = speed,
+        .bits_per_word = bits,
+    };*/
+
+    // 5. Execute the Full-Duplex Read/Write
+    if (ioctl(iSPIFd, SPI_IOC_MESSAGE(1), &tr) < 0) {
+        perror("Error: SPI transfer failed");
+        close(iSPIFd);
+        return EXIT_FAILURE;
+    }
+
+    // 6. Process your read data
+    printf("Data received from SPI:\n");
+    for (int i = 0; i < 3; i++) {
+        printf("Byte [%d]: 0x%02X\n", i, u8RxBuffer[i]);
+    }
+
+    close(iSPIFd);
+    return EXIT_SUCCESS;
+}
+
