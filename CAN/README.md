@@ -1,7 +1,7 @@
 # Controller Area Network (CAN) Protocol
 
 <p align="center">
-    <img src="CAN_Communication.png" alt="CAN Communication" width="900"/>
+    <img src="CAN_Communication.png" alt="CAN Communication" width="100%"/>
 </p>
 
 ---
