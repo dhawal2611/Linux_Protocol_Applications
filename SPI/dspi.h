@@ -13,6 +13,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
+#include <string.h>
 #include <fcntl.h>
 #include <unistd.h>
 #include <sys/ioctl.h>
@@ -26,19 +27,19 @@
 #define INIT_1 1
 #define INIT_M_1 -1
 
-#define SPI_DEVICE "/dev/spidev0.0"     // Default Raspberry Pi SPI bus
-#define SPI_SPEED 1000000 // 1MHz
-#define SPI_BITS 8
+#define SPI_DEVICE        "/dev/spidev0.0" // Change to your actual SPI bus/CS
+#define SPI_SPEED_HZ      10000000         // 10 MHz
+#define SPI_BITS_PER_WORD 8
 
 
 // Global Variables
-int iSPIFd;
-uint8_t mode = SPI_MODE_0; // SPI_MODE_X X=1, 2, 3, 4 modes check datasheet
-uint8_t bits = SPI_BITS;
-uint32_t speed = SPI_SPEED; // 1 MHz
 struct spi_ioc_transfer tr;
-uint8_t u8TxBuffer[3] = {0x80, 0x00, 0x00}; 
-uint8_t u8RxBuffer[3] = {0,};
+int iSPIFd;
+
+uint8_t u8Mode = SPI_MODE_0; // SPI_MODE_X X=0, 1, 2, 3 modes check datasheet
+			     // SPI Mode 0 (CPOL=0, CPHA=0)
+
+
 
 // Function Declarations
 

@@ -10,24 +10,22 @@
 #define DI2CAHT20_H
 
 // Headers
-#include "di2c.h"
+#include "dspi.h"
 
 // MACROS
-#define WRITE_BYTES_CNT 3
-#define READ_BYTES_CNT 7
-#define DELAY_FOR_AHT20 100000
 
-#define BUFF_INDEX0 0 
-#define BUFF_INDEX1 1
-#define BUFF_INDEX2 2
-#define BUFF_INDEX3 3
-#define BUFF_INDEX4 4
-#define BUFF_INDEX5 5
-#define BUFF_INDEX6 6
-#define BUFF_INDEX7 7
 
+// W25Qxx Standard Instruction Opcodes
+#define CMD_WRITE_ENABLE  0x06
+#define CMD_READ_STATUS_1 0x05
+#define CMD_SECTOR_ERASE  0x20
+#define CMD_PAGE_PROGRAM  0x02
+#define CMD_READ_DATA     0x03
+#define CMD_JEDEC_ID      0x9F
 
 // Global Variables
+uint8_t u8TxBuffer[3] = {0x80, 0x00, 0x00}; 
+uint8_t u8RxBuffer[3] = {0,};
 
 
 // Function Declarations
