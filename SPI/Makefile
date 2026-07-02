@@ -1,11 +1,11 @@
 CC      ?= gcc
 TARGET  := dspiw25qxx
 
-SRCS    := dspi.c 
-           #dspiw25qxx.c
+SRCS    := dspi.c \
+           dspiw25qxx.c
 
 OBJS    := $(SRCS:.c=.o)
-CFLAGS  ?= -Wall -Wextra -O2 -fcommon
+CFLAGS  ?= -Wall -Wextra -O2
 
 all: $(TARGET)
 

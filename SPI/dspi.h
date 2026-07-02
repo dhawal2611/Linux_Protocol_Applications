@@ -31,17 +31,16 @@
 #define SPI_SPEED_HZ      10000000         // 10 MHz
 #define SPI_BITS_PER_WORD 8
 
-
 // Global Variables
-struct spi_ioc_transfer tr;
-int iSPIFd;
-
-uint8_t u8Mode = SPI_MODE_0; // SPI_MODE_X X=0, 1, 2, 3 modes check datasheet
+static int iSPIFd;
+static uint8_t u8Mode = SPI_MODE_0; // SPI_MODE_X X=0, 1, 2, 3 modes check datasheet
 			     // SPI Mode 0 (CPOL=0, CPHA=0)
-
-
+static uint8_t u8Bits = SPI_BITS_PER_WORD;
+static uint32_t u32Speed = SPI_SPEED_HZ;
 
 // Function Declarations
-
+int iInitSPIDevice(void);
+int iSPITransfer(uint8_t *u8pTx, uint8_t *u8pRx, size_t sLen);
+void vCloseSPIDevice(void);
 
 #endif // DSPI_H

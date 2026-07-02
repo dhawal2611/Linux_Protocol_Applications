@@ -36,8 +36,9 @@ int iInitSPIDevice(void) {
         return FAILURE;
    }
 
-   // If need to 
-   if (ioctl(iSPIFd, SPI_IOC_WR_BITS_PER_WORD, &u8Bits) < INIT_0) {
+   // If need to set the bits and speed at the inti time then disable below code
+   // Or else keep it commented
+   /*if (ioctl(iSPIFd, SPI_IOC_WR_BITS_PER_WORD, &u8Bits) < INIT_0) {
         perror("Failed to configure to the slave device");
         close(iSPIFd);
         return FAILURE;
@@ -47,7 +48,7 @@ int iInitSPIDevice(void) {
         perror("Failed to configure to the slave device");
         close(iSPIFd);
         return FAILURE;
-   }
+   }*/
 
     return SUCCESS;  
 }

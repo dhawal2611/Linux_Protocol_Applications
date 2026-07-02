@@ -1,7 +1,7 @@
 /**
- * @file        di2cAHT20.c
- * @brief       I2C applicaiton code
- * @details     Read and Write data over I2C device
+ * @file        dspiw25qxx.c
+ * @brief       SPI W25QXX applicaiton code
+ * @details     Read and Write data over SPI device
  * @author      Lad Dhawal Umesh
  * @developedBy Lad Dhawal Umesh
  * @date        2026-06-24
@@ -11,136 +11,138 @@
  * Certain algorithms or logic patterns were adapted from publicly 
  * available online resources.
  */
+ 
 // Include Header
 #include "dspiw25qxx.h"
 
 // 1. Read JEDEC ID (Verifies connection)
-uint32_t w25q_read_id(int fd) {
-    uint8_t tx[4] = {CMD_JEDEC_ID, 0, 0, 0};
-    uint8_t rx[4] = {0};
+uint32_t u32w25qReadId() {
+    uint8_t u8TxBuffer[TX_RX_DATA_LEN] = {CMD_JEDEC_ID, INIT_0, INIT_0, INIT_0};
+    uint8_t u8RxBuffer[TX_RX_DATA_LEN] = {INIT_0};
 
-    if (spi_transfer(fd, tx, rx, 4) < 0) return 0;
-    return (rx[1] << 16) | (rx[2] << 8) | rx[3];
+    if (iSPITransfer(u8TxBuffer, u8RxBuffer, sizeof(u8TxBuffer)) < INIT_0) return INIT_0;
+    return (u8RxBuffer[DATA_INDEX_1] << SHIFT_16_BITS) | (u8RxBuffer[DATA_INDEX_2] << SHIFT_8_BITS) | u8RxBuffer[DATA_INDEX_3];
 }
 
 // 2. Send Write Enable Command
-int w25q_write_enable(int fd) {
-    uint8_t tx = CMD_WRITE_ENABLE;
-    return spi_transfer(fd, &tx, NULL, 1);
+int iw25qWriteEnable() {
+    uint8_t u8TxBuffer = CMD_WRITE_ENABLE;
+    return iSPITransfer(&u8TxBuffer, NULL, INIT_1);
 }
 
 // 3. Wait for Busy Bit (BUSY = Bit 0 of Status Register 1) to clear
-void w25q_wait_busy(int fd) {
-    uint8_t tx[2] = {CMD_READ_STATUS_1, 0xFF};
-    uint8_t rx[2] = {0};
+void vw25qWaitBusy() {
+    uint8_t u8TxBuffer[BUZY_TX_RX_DATA_LEN] = {CMD_READ_STATUS_1, MASK_8_BITS};
+    uint8_t u8RxBuffer[BUZY_TX_RX_DATA_LEN] = {INIT_0};
     
     do {
-        spi_transfer(fd, tx, rx, 2);
+        iSPITransfer(u8TxBuffer, u8RxBuffer, BUZY_TX_RX_DATA_LEN);
         usleep(1000); // 1ms sleep
-    } while (rx[1] & 0x01); 
+    } while (u8RxBuffer[DATA_INDEX_1] & 0x01); 
 }
 
 // 4. Erase a 4KB Sector (Required before writing new data)
-int w25q_erase_sector(int fd, uint32_t address) {
-    uint8_t tx[4] = {
+int iw25qEraseSector(uint32_t u32Address) {
+    uint8_t u8TxBuffer[TX_RX_DATA_LEN] = {
         CMD_SECTOR_ERASE,
-        (uint8_t)((address >> 16) & 0xFF),
-        (uint8_t)((address >> 8) & 0xFF),
-        (uint8_t)(address & 0xFF)
+        (uint8_t)((u32Address >> SHIFT_16_BITS) & MASK_8_BITS),
+        (uint8_t)((u32Address >> SHIFT_8_BITS) & MASK_8_BITS),
+        (uint8_t)(u32Address & MASK_8_BITS)
     };
 
-    w25q_write_enable(fd);
-    if (spi_transfer(fd, tx, NULL, 4) < 0) return -1;
+    iw25qWriteEnable();
+    if (iSPITransfer(u8TxBuffer, NULL, TX_RX_DATA_LEN) < INIT_0) {
+      return FAILURE;
+    }
     
-    w25q_wait_busy(fd);
-    return 0;
+    vw25qWaitBusy();
+    return SUCCESS;
 }
 
 // 5. Program a Page (Up to 256 bytes inside a singular page)
-int w25q_write_page(int fd, uint32_t address, uint8_t *data, size_t len) {
-    if (len > 256) len = 256; 
+int iw25qWritePage(uint32_t u32Address, uint8_t *u8Data, size_t sLen) {
+    if (sLen > MAX_PAGE_SIZE) {
+      sLen = MAX_PAGE_SIZE;
+    }
 
-    size_t tx_len = 4 + len;
-    uint8_t *tx = malloc(tx_len);
-    if (!tx) return -1;
+    size_t sTxLen = TX_RX_DATA_LEN + sLen;
+    uint8_t *u8TxBuffer = malloc(sTxLen);
+    if (!u8TxBuffer) {
+      return FAILURE;
+    }
 
-    tx[0] = CMD_PAGE_PROGRAM;
-    tx[1] = (uint8_t)((address >> 16) & 0xFF);
-    tx[2] = (uint8_t)((address >> 8) & 0xFF);
-    tx[3] = (uint8_t)(address & 0xFF);
-    memcpy(&tx[4], data, len);
+    u8TxBuffer[DATA_INDEX_0] = CMD_PAGE_PROGRAM;
+    u8TxBuffer[DATA_INDEX_1] = (uint8_t)((u32Address >> SHIFT_16_BITS) & MASK_8_BITS);
+    u8TxBuffer[DATA_INDEX_2] = (uint8_t)((u32Address >> SHIFT_8_BITS) & MASK_8_BITS);
+    u8TxBuffer[DATA_INDEX_3] = (uint8_t)(u32Address & MASK_8_BITS);
+    memcpy(&u8TxBuffer[DATA_INDEX_4], u8Data, sLen);
 
-    w25q_write_enable(fd);
-    int ret = spi_transfer(fd, tx, NULL, tx_len);
-    free(tx);
+    iw25qWriteEnable();
+    int ret = iSPITransfer(u8TxBuffer, NULL, sTxLen);
+    free(u8TxBuffer);
 
-    w25q_wait_busy(fd);
+    vw25qWaitBusy();
     return ret;
 }
 
 // 6. Read Data (Sequential read of any length)
-int w25q_read_data(int fd, uint32_t address, uint8_t *rx_buf, size_t len) {
-    size_t tx_len = 4 + len;
-    uint8_t *tx = calloc(tx_len, 1);
-    uint8_t *rx = malloc(tx_len);
-    if (!tx || !rx) {
-        free(tx); free(rx);
-        return -1;
+int iw25qReadData(uint32_t u32Address, uint8_t *u8RxBuff, size_t sLen) {
+    size_t sTxLen = TX_RX_DATA_LEN + sLen;
+    uint8_t *u8TxBuffer = calloc(sTxLen, INIT_1);
+    uint8_t *u8RxBuffer = malloc(sTxLen);
+    if (!u8TxBuffer || !u8RxBuffer) {
+        free(u8TxBuffer);
+        free(u8RxBuffer);
+        return FAILURE;
     }
 
-    tx[0] = CMD_READ_DATA;
-    tx[1] = (uint8_t)((address >> 16) & 0xFF);
-    tx[2] = (uint8_t)((address >> 8) & 0xFF);
-    tx[3] = (uint8_t)(address & 0xFF);
+    u8TxBuffer[DATA_INDEX_0] = CMD_READ_DATA;
+    u8TxBuffer[DATA_INDEX_1] = (uint8_t)((u32Address >> SHIFT_16_BITS) & MASK_8_BITS);
+    u8TxBuffer[DATA_INDEX_2] = (uint8_t)((u32Address >> SHIFT_8_BITS) & MASK_8_BITS);
+    u8TxBuffer[DATA_INDEX_3] = (uint8_t)(u32Address & MASK_8_BITS);
 
-    int ret = spi_transfer(fd, tx, rx, tx_len);
-    if (ret == 0) {
-        memcpy(rx_buf, &rx[4], len); // Skip command/address overhead
+    int ret = iSPITransfer(u8TxBuffer, u8RxBuffer, sTxLen);
+    if (ret == INIT_0) {
+        memcpy(u8RxBuff, &u8RxBuffer[DATA_INDEX_4], sLen); // Skip command/address overhead
     }
 
-    free(tx);
-    free(rx);
+    free(u8TxBuffer);
+    free(u8RxBuffer);
     return ret;
 }
 
-
-
 int main() {
-    int fd = open(SPI_DEVICE, O_RDWR);
-    if (fd < 0) {
-        perror("Error: Cannot open SPI device node");
-        return EXIT_FAILURE;
+    
+    if(iInitSPIDevice() == FAILURE) {
+      printf("Unable to initialize SPI\n");
+      goto SPI_EXIT_FAIL;
     }
 
-    // Set SPI Mode 0 (CPOL=0, CPHA=0) as expected by W25Qxx
-    uint8_t mode = SPI_MODE_0;
-    ioctl(fd, SPI_IOC_WR_MODE, &mode);
-
     // Verify chip connectivity
-    uint32_t id = w25q_read_id(fd);
+    uint32_t id = u32w25qReadId();
     printf("JEDEC Chip ID: 0x%06X\n", id);
-    if (id == 0 || id == 0xFFFFFF) {
+    if (id == INIT_0 || id == 0xFFFFFF) {
         printf("Error: Communication failure. Check wiring.\n");
-        close(fd);
-        return EXIT_FAILURE;
+        goto SPI_EXIT_FAIL;
     }
 
     // Target Address (Sector 0, Page 0)
     uint32_t target_addr = 0x000000;
     uint8_t write_data[] = "Hello Embedded Linux SPI Flash!";
-    uint8_t read_buffer[sizeof(write_data)] = {0};
+    uint8_t read_buffer[sizeof(write_data)] = {INIT_0};
 
     // Perform operations
     printf("Erasing sector at 0x%06X...\n", target_addr);
-    w25q_erase_sector(fd, target_addr);
+    iw25qEraseSector(target_addr);
 
     printf("Writing data: \"%s\"\n", write_data);
-    w25q_write_page(fd, target_addr, write_data, sizeof(write_data));
+    iw25qWritePage(target_addr, write_data, sizeof(write_data));
 
     printf("Reading data back...\n");
-    w25q_read_data(fd, target_addr, read_buffer, sizeof(read_buffer));
+    iw25qReadData(target_addr, read_buffer, sizeof(read_buffer));
     printf("Data Read: \"%s\"\n", read_buffer);
 
+SPI_EXIT_FAIL:
     vCloseSPIDevice();
     return SUCCESS;
 }
