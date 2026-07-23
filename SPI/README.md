@@ -1,7 +1,43 @@
 # SPI (Serial Peripheral Interface)
 
+The following diagram illustrates the basic SPI communication between a Master and a Slave device.
+
 <p align="center">
-    <img src="SPI_Communication.png" alt="I2C Communication" width="100%">
+  <img src="images/SPI_Communication.png" alt="SPI Communication" width="800">
+</p>
+
+---
+
+# SPI Connection Types
+
+SPI supports multiple hardware connection topologies.
+
+## 1. One-to-One Connection
+
+One master communicates with a single slave using dedicated SPI signals and a single Chip Select.
+
+<p align="center">
+  <img src="images/SPI_1-1.png" alt="SPI One-to-One Connection" width="700">
+</p>
+
+---
+
+## 2. Daisy Chain Connection
+
+In a daisy-chain configuration, multiple SPI devices are connected in series, allowing a single Chip Select line to control all devices.
+
+<p align="center">
+  <img src="images/SPI_Daisy_Chaining.png" alt="SPI Daisy Chain Connection" width="700">
+</p>
+
+---
+
+## 3. Multiple Chip Select Connection
+
+A single master communicates with multiple slave devices using independent Chip Select (CS) lines while sharing the clock and data lines.
+
+<p align="center">
+  <img src="images/SPI_Multi_CS.png" alt="SPI Multiple Chip Select Connection" width="700">
 </p>
 
 ---
