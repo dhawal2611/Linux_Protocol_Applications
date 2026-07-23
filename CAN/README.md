@@ -1,7 +1,32 @@
 # Controller Area Network (CAN) Protocol
 
+## 1. CAN Bus Connection
+
+This diagram illustrates the physical CAN Bus network architecture, including:
+
+- CAN High (CAN_H) and CAN Low (CAN_L) differential communication lines
+- 120Ω termination resistors at both ends of the bus
+- Multiple nodes connected in parallel
+- Differential signaling for high noise immunity
+
 <p align="center">
-    <img src="CAN_Communication.png" alt="CAN Communication" width="100%"/>
+  <img src="images/CAN_bus_connection.png" alt="CAN Bus Connection" width="100%"/>
+</p>
+
+---
+
+## 2. CAN Communication
+
+This diagram explains how a CAN message is transmitted between nodes, including:
+
+- CAN frame structure
+- Arbitration mechanism
+- Message transmission and reception
+- ACK process
+- Error detection and communication flow
+
+<p align="center">
+  <img src="images/CAN_Communication.png" alt="CAN Communication" width="100%"/>
 </p>
 
 ---

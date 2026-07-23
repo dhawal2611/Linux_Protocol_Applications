@@ -3,7 +3,7 @@
 The following diagram illustrates the basic SPI communication between a Master and a Slave device.
 
 <p align="center">
-  <img src="images/SPI_Communication.png" alt="SPI Communication" width="800">
+  <img src="images/SPI_Communication.png" alt="SPI Communication" width="100%">
 </p>
 
 ---
@@ -17,7 +17,7 @@ SPI supports multiple hardware connection topologies.
 One master communicates with a single slave using dedicated SPI signals and a single Chip Select.
 
 <p align="center">
-  <img src="images/SPI_1-1.png" alt="SPI One-to-One Connection" width="700">
+  <img src="images/SPI_1-1.png" alt="SPI One-to-One Connection" width="100%">
 </p>
 
 ---
@@ -27,7 +27,7 @@ One master communicates with a single slave using dedicated SPI signals and a si
 In a daisy-chain configuration, multiple SPI devices are connected in series, allowing a single Chip Select line to control all devices.
 
 <p align="center">
-  <img src="images/SPI_Daisy_Chaining.png" alt="SPI Daisy Chain Connection" width="700">
+  <img src="images/SPI_Daisy_Chaining.png" alt="SPI Daisy Chain Connection" width="100%">
 </p>
 
 ---
