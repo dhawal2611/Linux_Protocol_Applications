@@ -18,36 +18,57 @@ run_command()
     local EXEC_TIME
     local OUTPUT
     local STATUS
+    local RESULT
 
     START_TIME=$(date +%s)
 
     #
-    # Console Output
+    # Console/Logger Information
     #
-    log_info "[$TEST_ID] $TEST_NAME"
+    #log_info "[$TEST_ID] $TEST_NAME"
 
     #
-    # Log Header
+    # Test Header
     #
-    {
-        echo "======================================================================="
-        echo "Test ID        : $TEST_ID"
-        echo "Test Name      : $TEST_NAME"
-        echo "Start Time     : $(date)"
-        echo "Command        : $CMD"
-        echo "======================================================================="
-    } >> "$LOG_FILE"
+    write_test_log "
+################################################################################
+# TEST START : [$TEST_ID] $TEST_NAME
+################################################################################
+
+Test ID         : $TEST_ID
+Test Name       : $TEST_NAME
+Start Time      : $(date)
+Command         : $CMD
+
+--------------------------------------------------------------------------------
+Command Output
+--------------------------------------------------------------------------------
+"
 
     #
-    # Empty Command Check
+    # Validate Command
     #
     if [ -z "$CMD" ]
     then
-        echo "ERROR : Empty Command" >> "$LOG_FILE"
+        write_test_log "ERROR : Empty Command"
 
         log_fail "$TEST_ID"
 
-        echo "" >> "$LOG_FILE"
+        write_test_log "
+
+--------------------------------------------------------------------------------
+Test Summary
+--------------------------------------------------------------------------------
+
+Result          : FAIL
+Exit Status     : 1
+Execution Time  : 0 sec
+End Time        : $(date)
+
+################################################################################
+# TEST END : $TEST_ID
+################################################################################
+"
 
         return 1
     fi
@@ -59,30 +80,47 @@ run_command()
     STATUS=$?
 
     #
-    # Save Command Output ONLY to Log File
+    # Print Command Output
     #
-    echo "$OUTPUT" >> "$LOG_FILE"
+    write_test_log "$OUTPUT"
 
+    #
+    # Calculate Execution Time
+    #
     END_TIME=$(date +%s)
     EXEC_TIME=$((END_TIME - START_TIME))
 
-    {
-        echo ""
-        echo "Exit Status    : $STATUS"
-        echo "Execution Time : ${EXEC_TIME} sec"
-        echo "======================================================================="
-        echo ""
-    } >> "$LOG_FILE"
-
     #
-    # Console Status
+    # Test Result
     #
     if [ "$STATUS" -eq 0 ]
     then
+        RESULT="PASS"
         log_pass "$TEST_ID"
     else
+        RESULT="FAIL"
         log_fail "$TEST_ID"
     fi
+
+    #
+    # Test Footer
+    #
+    write_test_log "
+
+--------------------------------------------------------------------------------
+Test Summary
+--------------------------------------------------------------------------------
+
+Result          : $RESULT
+Exit Status     : $STATUS
+Execution Time  : ${EXEC_TIME} sec
+End Time        : $(date)
+
+################################################################################
+# TEST END : $TEST_ID
+################################################################################
+
+"
 
     return "$STATUS"
 }
@@ -96,21 +134,37 @@ manual_test()
     local TEST_NAME="$2"
     local DESCRIPTION="$3"
     local EXPECTED="$4"
+    local RESULT
 
     log_info "[$TEST_ID] $TEST_NAME"
 
-    echo ""
-    echo "=================================================================="
-    echo "MANUAL TEST REQUIRED"
-    echo "=================================================================="
-    echo "$DESCRIPTION"
-    echo ""
-    echo "Expected Result:"
-    echo "  $EXPECTED"
-    echo ""
-    echo "Press 'p' for PASS"
-    echo "Press 'f' for FAIL"
-    echo "=================================================================="
+    MANUAL_TEXT="
+################################################################################
+# MANUAL TEST
+################################################################################
+
+Test ID         : $TEST_ID
+Test Name       : $TEST_NAME
+
+Description
+-----------
+$DESCRIPTION
+
+Expected Result
+---------------
+$EXPECTED
+
+Press 'p' for PASS
+Press 'f' for FAIL
+
+################################################################################
+"
+
+    #
+    # Display manual test instructions according to
+    # TEST_LOG_OUTPUT_MODE (console/file/both)
+    #
+    write_test_log "$MANUAL_TEXT"
 
     while true
     do
@@ -122,15 +176,19 @@ manual_test()
 
                 log_pass "$TEST_ID"
 
-                {
-                    echo "======================================================================="
-                    echo "Test ID        : $TEST_ID"
-                    echo "Test Name      : $TEST_NAME"
-                    echo "Result         : PASS"
-                    echo "Date           : $(date)"
-                    echo "======================================================================="
-                    echo ""
-                } >> "$LOG_FILE"
+                write_test_log "
+--------------------------------------------------------------------------------
+Manual Test Result
+--------------------------------------------------------------------------------
+
+Result          : PASS
+Completion Time : $(date)
+
+################################################################################
+# TEST END : $TEST_ID
+################################################################################
+
+"
 
                 return 0
                 ;;
@@ -139,15 +197,19 @@ manual_test()
 
                 log_fail "$TEST_ID"
 
-                {
-                    echo "======================================================================="
-                    echo "Test ID        : $TEST_ID"
-                    echo "Test Name      : $TEST_NAME"
-                    echo "Result         : FAIL"
-                    echo "Date           : $(date)"
-                    echo "======================================================================="
-                    echo ""
-                } >> "$LOG_FILE"
+                write_test_log "
+--------------------------------------------------------------------------------
+Manual Test Result
+--------------------------------------------------------------------------------
+
+Result          : FAIL
+Completion Time : $(date)
+
+################################################################################
+# TEST END : $TEST_ID
+################################################################################
+
+"
 
                 return 1
                 ;;

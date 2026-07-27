@@ -7,6 +7,23 @@ mkdir -p "$LOG_DIR"
 LOG_FILE="$LOG_DIR/validation_$(date +%Y%m%d_%H%M%S).log"
 
 ###############################################################################
+# Logging Configuration
+###############################################################################
+
+# Command Output
+# none    : Do not print command output anywhere
+# console : Print command output only on console
+# file    : Save command output only to log file
+# both    : Print on console and save to log file
+TEST_LOG_OUTPUT_MODE="console"
+
+# Logger Messages (INFO/PASS/FAIL)
+# console : Console only
+# file    : Log file only
+# both    : Console + Log file
+LOGGER_OUTPUT_MODE="console"
+
+###############################################################################
 # GPIO Configuration
 ###############################################################################
 
