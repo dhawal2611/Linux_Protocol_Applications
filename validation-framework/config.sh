@@ -8,20 +8,50 @@ LOG_FILE="$LOG_DIR/validation_$(date +%Y%m%d_%H%M%S).log"
 
 ###############################################################################
 # Logging Configuration
+#
+# LOGGER_OUTPUT_MODE
+# Controls where framework messages are displayed.
+# These include:
+#   - [INFO]
+#   - [PASS]
+#   - [FAIL]
+#   - [WARN]
+#
+# Valid Values:
+#   console    Display messages only on the console.
+#   file       Save messages only to the log file.
+#   both       Display messages on the console and save to the log file.
+#
+# Default:
+#   console
 ###############################################################################
-
-# Command Output
-# none    : Do not print command output anywhere
-# console : Print command output only on console
-# file    : Save command output only to log file
-# both    : Print on console and save to log file
-TEST_LOG_OUTPUT_MODE="console"
-
-# Logger Messages (INFO/PASS/FAIL)
-# console : Console only
-# file    : Log file only
-# both    : Console + Log file
 LOGGER_OUTPUT_MODE="console"
+
+
+###############################################################################
+# Test Log Configuration
+#
+# TEST_LOG_OUTPUT_MODE
+# Controls where detailed test execution logs are written.
+#
+# These logs include:
+#   - Test Start/End headers
+#   - Executed command
+#   - Command output
+#   - Test summary
+#   - Execution time
+#   - Exit status
+#
+# Valid Values:
+#   console    Print detailed test logs only on the console.
+#   file       Save detailed test logs only to the log file.
+#   both       Print detailed test logs on the console and save to the log file.
+#   none       Disable detailed test logs.
+#
+# Default:
+#   console
+###############################################################################
+TEST_LOG_OUTPUT_MODE="console"
 
 ###############################################################################
 # GPIO Configuration

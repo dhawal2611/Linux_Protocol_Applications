@@ -152,6 +152,49 @@ parse_arguments()
                 show_help
                 exit 0
                 ;;
+	    --log)
+		    shift
+
+		    case "$1" in
+			console|file|both)
+			    LOGGER_OUTPUT_MODE="$1"
+			    TEST_LOG_OUTPUT_MODE="$1"
+			    ;;
+			*)
+			    echo "Invalid log mode: $1"
+			    echo "Valid values: console, file, both"
+			    exit 1
+			    ;;
+		    esac
+		    ;;
+
+		--logger)
+		    shift
+
+		    case "$1" in
+			console|file|both)
+			    LOGGER_OUTPUT_MODE="$1"
+			    ;;
+			*)
+			    echo "Invalid logger mode: $1"
+			    exit 1
+			    ;;
+		    esac
+		    ;;
+
+		--testlog)
+		    shift
+
+		    case "$1" in
+			console|file|both|none)
+			    TEST_LOG_OUTPUT_MODE="$1"
+			    ;;
+			*)
+			    echo "Invalid test log mode: $1"
+			    exit 1
+			    ;;
+		    esac
+		    ;;
 
             all)
 

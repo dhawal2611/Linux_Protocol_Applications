@@ -32,7 +32,8 @@ write_test_log()
             ;;
 
         both)
-            printf "%s\n" "$DATA" | tee -a "$LOG_FILE" >/dev/null
+            #printf "%s\n" "$DATA" | tee -a "$LOG_FILE" >/dev/null
+            printf "%s\n" "$DATA" | tee -a "$LOG_FILE"
             ;;
 
         none)

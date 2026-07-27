@@ -27,3 +27,37 @@ Structure:
 | `"file"`             | INFO/PASS/FAIL only in the log file                        |
 | `"both"`             | INFO/PASS/FAIL on both terminal and log file (recommended) |
 
+
+### Example command-line overrides
+
+With the above defaults, users can still override them when running the framework:
+
+```bash
+./validate.sh cpu
+```
+
+Uses:
+
+* `LOGGER_OUTPUT_MODE="console"`
+* `TEST_LOG_OUTPUT_MODE="console"`
+
+```bash
+./validate.sh cpu --log file
+```
+
+Uses:
+
+* `LOGGER_OUTPUT_MODE="file"`
+* `TEST_LOG_OUTPUT_MODE="file"`
+
+```bash
+./validate.sh cpu --logger both --testlog file
+```
+
+Uses:
+
+* `LOGGER_OUTPUT_MODE="both"`
+* `TEST_LOG_OUTPUT_MODE="file"`
+
+This documentation makes it immediately clear to anyone maintaining the framework what each variable controls, the accepted values, and the default behavior.
+
