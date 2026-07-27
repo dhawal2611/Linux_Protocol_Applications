@@ -14,6 +14,17 @@ cpu_001()
         "CPU-001" \
         "Verify CPU Architecture and Cores" \
         "lscpu"
+
+    echo "$++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
+    echo "$COMMAND_OUTPUT" | grep "Architecture"
+    echo "$++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
+    if echo "$COMMAND_OUTPUT" | grep -q "Architecture"
+    then
+        log_info "CPU Architecture Found"
+    else
+        log_fail "CPU-001 Output Validation"
+    fi
+
 }
 
 #
@@ -26,6 +37,14 @@ cpu_002()
         "CPU-002" \
         "Verify CPU Information" \
         "cat /proc/cpuinfo"
+
+    if echo "$COMMAND_OUTPUT" | grep -q "^processor"
+    then
+        log_info "Processor Entries Found"
+    else
+        log_fail "CPU-002 Output Validation"
+    fi
+
 }
 
 #
