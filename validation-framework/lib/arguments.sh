@@ -91,7 +91,7 @@ gpio
 ethernet
 gbe_phy
 dhcp
-ssh
+sshaccess
 pcie
 serdes
 sgmii
@@ -152,13 +152,36 @@ parse_arguments()
                 show_help
                 exit 0
                 ;;
+
+	    --csv)
+                CSV_REPORT_ENABLE=1
+
+                #
+                # Optional CSV filename
+                #
+                if [[ -n "$2" && "$2" != -* ]]
+                then
+                    CSV_FILE="$2"
+                shift
+                fi
+                ;;
 	    --log)
-		    shift
+                shift
 
 		    case "$1" in
 			console|file|both)
 			    LOGGER_OUTPUT_MODE="$1"
 			    TEST_LOG_OUTPUT_MODE="$1"
+			    #
+			    # Enable log file generation whenever
+			    # any output is directed to a file.
+			    #
+			    if [ "$1" = "file" ] || [ "$1" = "both" ]
+			    then
+			        LOG_FILE_ENABLE=1
+			    else
+			        LOG_FILE_ENABLE=0
+			    fi
 			    ;;
 			*)
 			    echo "Invalid log mode: $1"
@@ -174,6 +197,14 @@ parse_arguments()
 		    case "$1" in
 			console|file|both)
 			    LOGGER_OUTPUT_MODE="$1"
+			    #
+			    # Enable log file generation automatically
+			    #
+			    case "$TEST_LOG_OUTPUT_MODE" in
+			        file|both)
+				    LOG_FILE_ENABLE=1
+				    ;;
+			    esac
 			    ;;
 			*)
 			    echo "Invalid logger mode: $1"
@@ -188,6 +219,14 @@ parse_arguments()
 		    case "$1" in
 			console|file|both|none)
 			    TEST_LOG_OUTPUT_MODE="$1"
+			    #
+			    # Enable log file generation automatically
+			    #
+			    case "$LOGGER_OUTPUT_MODE" in
+				file|both)
+					LOG_FILE_ENABLE=1
+					;;
+			    esac
 			    ;;
 			*)
 			    echo "Invalid test log mode: $1"
@@ -214,7 +253,7 @@ parse_arguments()
                 ethernet
                 gbe_phy
                 dhcp
-                ssh
+                sshaccess
                 pcie
                 serdes
                 sgmii

@@ -4,7 +4,44 @@ LOG_DIR="./logs"
 
 mkdir -p "$LOG_DIR"
 
-LOG_FILE="$LOG_DIR/validation_$(date +%Y%m%d_%H%M%S).log"
+#LOG_FILE="$LOG_DIR/validation_$(date +%Y%m%d_%H%M%S).log"
+
+###############################################################################
+# CSV Report Configuration
+#
+# Enable/Disable CSV report generation.
+#
+# Default:
+#   0 : Disabled
+#   1 : Enabled
+#
+# NOTE:
+# Can be overridden using:
+#
+#   ./validate.sh cpu --csv
+#
+###############################################################################
+CSV_REPORT_ENABLE=0
+
+###############################################################################
+# CSV Report File
+###############################################################################
+CSV_FILE=""
+
+###############################################################################
+# Log File
+#
+# NOTE:
+# LOG_FILE is generated dynamically in validate.sh after parsing the
+# command-line arguments so that the module or suite name can be included
+# in the log file name.
+###############################################################################
+LOG_FILE=""
+
+###############################################################################
+# Log File Generation
+###############################################################################
+LOG_FILE_ENABLE=0
 
 ###############################################################################
 # Logging Configuration

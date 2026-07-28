@@ -21,6 +21,52 @@ parse_arguments "$@"
 trap cleanup SIGINT
 
 ###############################################################################
+# Generate Log File Name
+###############################################################################
+
+TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+
+#
+# Use first selected module/suite in log file name
+#
+LOG_TARGET="${MODULE_LIST[0]}"
+
+#
+# If multiple modules are selected, use "multi"
+#
+if [ "${#MODULE_LIST[@]}" -gt 1 ]
+then
+    LOG_TARGET="multi"
+fi
+
+###############################################################################
+# Create Log File
+###############################################################################
+if [ "$LOG_FILE_ENABLE" -eq 1 ]
+then
+    LOG_FILE="${LOG_DIR}/validation_${TIMESTAMP}_${LOG_TARGET}.log"
+
+    touch "$LOG_FILE"
+fi
+
+###############################################################################
+# Create CSV Report
+###############################################################################
+if [ "$CSV_REPORT_ENABLE" -eq 1 ]
+then
+
+    if [ -z "$CSV_FILE" ]
+    then
+        CSV_FILE="${LOG_DIR}/validation_${TIMESTAMP}_${LOG_TARGET}.csv"
+    fi
+
+    #echo "\"Module\",\"Test ID\",\"Test Name\",\"Command\",\"Result\",\"Exit Status\",\"Execution Time(s)\",\"Start Time\",\"End Time\",\"Output\"" > "$CSV_FILE"
+    printf '"Module","Test ID","Test Name","Command","Result","Exit Status","Execution Time(s)","Start Time","End Time","Output"\n' \
+> "$CSV_FILE"
+
+fi
+
+###############################################################################
 # Execute Modules / Suites
 ###############################################################################
 run_modules()
