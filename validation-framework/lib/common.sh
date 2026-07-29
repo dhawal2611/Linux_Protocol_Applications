@@ -4,6 +4,8 @@
 
 initialize_framework()
 {
+    TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+    trap cleanup SIGINT
     #
     # Create Directories
     #
@@ -38,6 +40,7 @@ create_log_files()
     #
     if [ "$LOG_FILE_ENABLE" -eq 1 ]
     then
+	LOG_FILE="${LOG_DIR}/validation_${TIMESTAMP}_${LOG_TARGET}.log"
         touch "$LOG_FILE"
     fi
 

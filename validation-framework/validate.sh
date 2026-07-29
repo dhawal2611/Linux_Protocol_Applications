@@ -4,9 +4,10 @@
 # Description : Embedded Linux Validation Framework
 ###############################################################################
 
-SCRIPT_DIR=$(dirname "$(realpath "$0")")
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 source "$SCRIPT_DIR/config.sh"
+
 source "$SCRIPT_DIR/lib/logger.sh"
 source "$SCRIPT_DIR/lib/common.sh"
 source "$SCRIPT_DIR/lib/arguments.sh"
@@ -35,7 +36,7 @@ parse_arguments "$@"
 initialize_framework
 
 # Handle Ctrl+C
-trap cleanup SIGINT
+#trap cleanup SIGINT
 
 ###############################################################################
 # Generate Log File Name
@@ -59,12 +60,12 @@ fi
 ###############################################################################
 # Create Log File
 ###############################################################################
-if [ "$LOG_FILE_ENABLE" -eq 1 ]
-then
-    LOG_FILE="${LOG_DIR}/validation_${TIMESTAMP}_${LOG_TARGET}.log"
-
-    touch "$LOG_FILE"
-fi
+#if [ "$LOG_FILE_ENABLE" -eq 1 ]
+#then
+#    LOG_FILE="${LOG_DIR}/validation_${TIMESTAMP}_${LOG_TARGET}.log"
+#
+#    touch "$LOG_FILE"
+#fi
 
 ###############################################################################
 # Create CSV Report
@@ -78,8 +79,8 @@ then
     fi
 
     #echo "\"Module\",\"Test ID\",\"Test Name\",\"Command\",\"Result\",\"Exit Status\",\"Execution Time(s)\",\"Start Time\",\"End Time\",\"Output\"" > "$CSV_FILE"
-    printf '"Module","Test ID","Test Name","Command","Result","Exit Status","Execution Time(s)","Start Time","End Time","Output"\n' \
-> "$CSV_FILE"
+    #printf '"Module","Test ID","Test Name","Command","Result","Exit Status","Execution Time(s)","Start Time","End Time","Output"\n' \> "$CSV_FILE"
+    csv_create_header
 
 fi
 
@@ -109,7 +110,12 @@ run_single_module()
     # Load Module
     #
     clear_test_registry
-    source "$SCRIPT_DIR/modules/${MODULE}.sh"
+    #source "$SCRIPT_DIR/modules/${MODULE}.sh"
+    if ! source "$SCRIPT_DIR/modules/${MODULE}.sh"
+    then
+        log_error "Failed to load module ${MODULE}"
+        return 1
+    fi
 
     #
     # Verify Module Dependencies
@@ -179,7 +185,11 @@ run_single_suite()
     #
     # Load Suite
     #
-    source "$SCRIPT_DIR/suites/${SUITE}.sh"
+    #source "$SCRIPT_DIR/suites/${SUITE}.sh"
+    if ! source "$SCRIPT_DIR/suites/${SUITE}.sh"
+    then
+        return 1
+    fi
     log_info "Modules in Suite : ${#MODULE_LIST[@]}"
 
     #
@@ -234,22 +244,16 @@ execute_validation()
     fi
 }
 
-if [ "$LOOP_MODE" -eq 1 ]
-then
-
-    while true
-    do
-        execute_validation
-        sleep 2
-    done
-
-else
-
+while [ "$LOOP_MODE" -eq 1 ]
+do
     execute_validation
+    sleep 2
+done
+
+[ "$LOOP_MODE" -eq 0 ] && execute_validation
+
 
 fi
-
-print_summary
 
 ###############################################################################
 # Print Final Summary
