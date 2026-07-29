@@ -5,317 +5,537 @@
 ###############################################################################
 
 ###############################################################################
-# Display Help
+# Global Variables
 ###############################################################################
-show_help()
+
+#
+# Selected Modules
+#
+MODULE_LIST=()
+
+#
+# Selected Suites
+#
+SUITE_LIST=()
+
+#
+# Suite Selected Flag
+#
+SUITE_SELECTED=0
+
+###############################################################################
+# Discover Available Modules and Suites
+###############################################################################
+
+discover_modules_and_suites()
 {
-cat << EOF
+    #
+    # Discover Modules
+    #
+    AVAILABLE_MODULES=()
 
-===============================================================================
-                 Embedded Linux Validation Framework
-===============================================================================
+    for FILE in "$SCRIPT_DIR/modules"/*.sh
+    do
+        [ -e "$FILE" ] || continue
 
-Usage:
-    ./validate.sh <module>
-    ./validate.sh <suite>
-    ./validate.sh all
-    ./validate.sh -l <module>
-    ./validate.sh --loop <module>
+        AVAILABLE_MODULES+=("$(basename "$FILE" .sh)")
+    done
 
-Examples
+    #
+    # Discover Suites
+    #
+    AVAILABLE_SUITES=()
 
-Run CPU Validation
-    ./validate.sh cpu
+    for FILE in "$SCRIPT_DIR/suites"/*.sh
+    do
+        [ -e "$FILE" ] || continue
 
-Run DDR4 Validation
-    ./validate.sh ddr4
-
-Run Crypto Validation
-    ./validate.sh crypto
-
-Run Multiple Modules
-    ./validate.sh cpu ddr4 ethernet
-
-Run Storage Suite
-    ./validate.sh storage
-
-Run Networking Suite
-    ./validate.sh networking
-
-Run Power Management Suite
-    ./validate.sh power_management
-
-Run Security Suite
-    ./validate.sh security
-
-Run Interface Suite
-    ./validate.sh interfaces
-
-Run Stress Suite
-    ./validate.sh stress
-
-Run Complete Validation
-    ./validate.sh full_validation
-
-Run All Modules
-    ./validate.sh all
-
-Continuous Mode
-    ./validate.sh --loop cpu
-
-Help
-    ./validate.sh --help
-
-===============================================================================
-
-EOF
+        AVAILABLE_SUITES+=("$(basename "$FILE" .sh)")
+    done
 }
 
 ###############################################################################
-# Supported Individual Modules
+# Check Module
 ###############################################################################
 
-VALID_MODULES=(
-cpu
-thermal
-power
-ddr4
-emmc
-nvme
-sata
-spinor
-spi
-i2c
-uart
-gpio
-ethernet
-gbe_phy
-dhcp
-sshaccess
-pcie
-serdes
-sgmii
-usb
-rtc
-rtc_post
-watchdog
-watchdog_post
-systemd
-journald
-suspend_resume
-reboot
-reboot_post
-power_cycle
-power_cycle_post
-crypto
-crypto_kernel
-crypto_openssl
-crypto_benchmark
-crypto_rng
-crypto_luks
-crypto_stress
-long_duration_stress
-)
+is_module()
+{
+    local MODULE="$1"
+
+    for ITEM in "${AVAILABLE_MODULES[@]}"
+    do
+        [ "$ITEM" = "$MODULE" ] && return 0
+    done
+
+    return 1
+}
 
 ###############################################################################
-# Supported Test Suites
+# Check Suite
 ###############################################################################
 
-VALID_SUITES=(
-basic
-storage
-interfaces
-networking
-power_management
-security
-stress
-full_validation
-)
+is_suite()
+{
+    local SUITE="$1"
+
+    if [ "$SUITE" = "all" ]; then
+        return 0
+    fi
+
+    for ITEM in "${AVAILABLE_SUITES[@]}"
+    do
+        [ "$ITEM" = "$SUITE" ] && return 0
+    done
+
+    return 1
+}
 
 ###############################################################################
-# Parse Command Line Arguments
+# Add Module
+###############################################################################
+
+add_module()
+{
+    local MODULE="$1"
+
+    #
+    # Avoid duplicate modules
+    #
+    for ITEM in "${MODULE_LIST[@]}"
+    do
+        [ "$ITEM" = "$MODULE" ] && return
+    done
+
+    MODULE_LIST+=("$MODULE")
+}
+
+###############################################################################
+# Add Suite
+###############################################################################
+
+add_suite()
+{
+    local SUITE="$1"
+
+    if [ "$SUITE" = "all" ]
+    then
+        MODULE_LIST=("${AVAILABLE_MODULES[@]}")
+        RUN_ALL_MODULES=1
+        return
+    fi
+    #
+    # Avoid duplicate suites
+    #
+    for ITEM in "${SUITE_LIST[@]}"
+    do
+        [ "$ITEM" = "$SUITE" ] && return
+    done
+
+    SUITE_SELECTED=1
+    SUITE_LIST+=("$SUITE")
+}
+
+###############################################################################
+# Parse Logger Mode
+###############################################################################
+
+parse_logger()
+{
+    case "$1" in
+
+        console|file|both)
+
+            LOGGER_OUTPUT_MODE="$1"
+            ;;
+
+        *)
+
+            echo
+            echo "ERROR : Invalid LOGGER_OUTPUT_MODE : $1"
+            echo
+            echo "Valid Values:"
+            echo "    console"
+            echo "    file"
+            echo "    both"
+            echo
+
+            exit 1
+            ;;
+
+    esac
+}
+
+###############################################################################
+# Parse Test Log Mode
+###############################################################################
+
+parse_testlog()
+{
+    case "$1" in
+
+        console|file|both|none)
+
+            TEST_LOG_OUTPUT_MODE="$1"
+            ;;
+
+        *)
+
+            echo
+            echo "ERROR : Invalid TEST_LOG_OUTPUT_MODE : $1"
+            echo
+            echo "Valid Values:"
+            echo "    console"
+            echo "    file"
+            echo "    both"
+            echo "    none"
+            echo
+
+            exit 1
+            ;;
+
+    esac
+}
+
+###############################################################################
+# Parse CSV
+###############################################################################
+
+parse_csv()
+{
+    CSV_REPORT_ENABLE=1
+
+    #
+    # Optional CSV filename
+    #
+    if [ -n "$1" ] && [[ "$1" != -* ]]
+    then
+        CSV_FILE="$1"
+        shift
+    fi
+}
+
+###############################################################################
+# Parse Loop
+###############################################################################
+
+parse_loop()
+{
+    LOOP_MODE=1
+}
+
+###############################################################################
+# Generate Log Target
+###############################################################################
+
+generate_log_target()
+{
+    local TARGET=""
+
+    if [ "$SUITE_SELECTED" -eq 1 ]
+    then
+
+        TARGET=$(IFS=_ ; echo "${SUITE_LIST[*]}")
+
+    else
+
+        TARGET=$(IFS=_ ; echo "${MODULE_LIST[*]}")
+
+    fi
+
+    [ -z "$TARGET" ] && TARGET="validation"
+
+    LOG_TARGET="$TARGET"
+}
+
+###############################################################################
+# Show Help
+###############################################################################
+
+show_help()
+{
+    #
+    # Make sure latest modules/suites are discovered
+    #
+    discover_modules_and_suites
+
+    echo
+    echo "==============================================================================="
+    echo "              Embedded Linux Validation Framework"
+    echo "==============================================================================="
+    echo
+    echo "Usage:"
+    echo
+    echo "    ./validate.sh [OPTIONS] <MODULE(S)>"
+    echo "    ./validate.sh [OPTIONS] <SUITE(S)>"
+    echo
+    echo "==============================================================================="
+    echo "AVAILABLE MODULES"
+    echo "==============================================================================="
+
+    for MODULE in "${AVAILABLE_MODULES[@]}"
+    do
+        printf "    %-20s\n" "$MODULE"
+    done
+
+    echo
+    echo "==============================================================================="
+    echo "AVAILABLE SUITES"
+    echo "==============================================================================="
+
+    for SUITE in "${AVAILABLE_SUITES[@]}"
+    do
+        printf "    %-20s\n" "$SUITE"
+    done
+
+    echo
+    echo "==============================================================================="
+    echo "OPTIONS"
+    echo "==============================================================================="
+    echo
+    printf "    %-28s %s\n" "-h, --help"          "Show this help message"
+    printf "    %-28s %s\n" "-l, --loop"          "Run continuously until Ctrl+C"
+    printf "    %-28s %s\n" "--logger MODE"       "Logger output mode"
+    printf "    %-28s %s\n" "--testlog MODE"      "Test log output mode"
+    printf "    %-28s %s\n" "--csv"               "Enable CSV report generation"
+    printf "    %-28s %s\n" "--csv <file>"        "Custom CSV report filename"
+    printf "    %-28s %s\n" "--version"           "Show framework version"
+    echo
+
+    echo "==============================================================================="
+    echo "LOGGER MODES"
+    echo "==============================================================================="
+    echo
+    printf "    %-15s %s\n" "console" "Print logger messages to console"
+    printf "    %-15s %s\n" "file"    "Write logger messages to log file"
+    printf "    %-15s %s\n" "both"    "Print to console and log file"
+    echo
+
+    echo "==============================================================================="
+    echo "TEST LOG MODES"
+    echo "==============================================================================="
+    echo
+    printf "    %-15s %s\n" "console" "Print command/test logs to console"
+    printf "    %-15s %s\n" "file"    "Write command/test logs to log file"
+    printf "    %-15s %s\n" "both"    "Print to console and log file"
+    printf "    %-15s %s\n" "none"    "Disable command/test logs"
+    echo
+
+    echo "==============================================================================="
+    echo "EXAMPLES"
+    echo "==============================================================================="
+    echo
+    echo "Run a single module:"
+    echo "    ./validate.sh cpu"
+    echo
+    echo "Run multiple modules:"
+    echo "    ./validate.sh cpu ddr ethernet"
+    echo
+    echo "Run a suite:"
+    echo "    ./validate.sh networking"
+    echo
+    echo "Run multiple suites:"
+    echo "    ./validate.sh networking storage"
+    echo
+    echo "Enable continuous execution:"
+    echo "    ./validate.sh cpu --loop"
+    echo
+    echo "Enable logger to console only:"
+    echo "    ./validate.sh cpu --logger console"
+    echo
+    echo "Enable logger to file:"
+    echo "    ./validate.sh cpu --logger file"
+    echo
+    echo "Enable logger to both:"
+    echo "    ./validate.sh cpu --logger both"
+    echo
+    echo "Print test logs to console:"
+    echo "    ./validate.sh cpu --testlog console"
+    echo
+    echo "Store test logs to file:"
+    echo "    ./validate.sh cpu --testlog file"
+    echo
+    echo "Print and store test logs:"
+    echo "    ./validate.sh cpu --testlog both"
+    echo
+    echo "Disable test logs:"
+    echo "    ./validate.sh cpu --testlog none"
+    echo
+    echo "Generate CSV report:"
+    echo "    ./validate.sh cpu --csv"
+    echo
+    echo "Generate custom CSV report:"
+    echo "    ./validate.sh cpu --csv cpu_report.csv"
+    echo
+    echo "Run full validation:"
+    echo "    ./validate.sh full_validation"
+    echo
+    echo "Combined example:"
+    echo "    ./validate.sh cpu ddr --logger both --testlog file --csv --loop"
+    echo
+    echo "==============================================================================="
+    echo "NOTES"
+    echo "==============================================================================="
+    echo
+    echo "  • Modules are loaded automatically from the modules/ directory."
+    echo "  • Suites are loaded automatically from the suites/ directory."
+    echo "  • Log file creation is automatically enabled when:"
+    echo "        --logger file"
+    echo "        --logger both"
+    echo "        --testlog file"
+    echo "        --testlog both"
+    echo "  • CSV report generation is enabled only when '--csv' is specified."
+    echo "  • Press Ctrl+C to stop loop mode."
+    echo
+    echo "==============================================================================="
+    echo
+
+    exit 0
+}
+###############################################################################
+# Parse Arguments
 ###############################################################################
 
 parse_arguments()
 {
     MODULE_LIST=()
+    SUITE_LIST=()
 
-    while [[ $# -gt 0 ]]
+    #
+    # Discover Modules and Suites
+    #
+    discover_modules_and_suites
+
+    #log_debug "Available Modules : ${AVAILABLE_MODULES[*]}"
+    #log_debug "Available Suites  : ${AVAILABLE_SUITES[*]}"
+
+    while [ $# -gt 0 ]
     do
+
         case "$1" in
 
-            -l|--loop)
-                LOOP_MODE=1
-                ;;
+            ###################################################################
+            # Help
+            ###################################################################
 
             -h|--help)
+
                 show_help
-                exit 0
                 ;;
 
-	    --csv)
-                CSV_REPORT_ENABLE=1
+            ###################################################################
+            # Loop
+            ###################################################################
 
-                #
-                # Optional CSV filename
-                #
-                if [[ -n "$2" && "$2" != -* ]]
-                then
-                    CSV_FILE="$2"
+            -l|--loop)
+
+                parse_loop
+                ;;
+
+            ###################################################################
+            # Logger
+            ###################################################################
+
+            --logger)
+
                 shift
-                fi
+
+                [ $# -eq 0 ] && \
+                {
+                    echo "ERROR : Missing logger mode."
+                    exit 1
+                }
+
+                parse_logger "$1"
                 ;;
-	    --log)
+
+            ###################################################################
+            # Test Log
+            ###################################################################
+
+            --testlog)
+
                 shift
 
-		    case "$1" in
-			console|file|both)
-			    LOGGER_OUTPUT_MODE="$1"
-			    TEST_LOG_OUTPUT_MODE="$1"
-			    #
-			    # Enable log file generation whenever
-			    # any output is directed to a file.
-			    #
-			    if [ "$1" = "file" ] || [ "$1" = "both" ]
-			    then
-			        LOG_FILE_ENABLE=1
-			    else
-			        LOG_FILE_ENABLE=0
-			    fi
-			    ;;
-			*)
-			    echo "Invalid log mode: $1"
-			    echo "Valid values: console, file, both"
-			    exit 1
-			    ;;
-		    esac
-		    ;;
+                [ $# -eq 0 ] && \
+                {
+                    echo "ERROR : Missing test log mode."
+                    exit 1
+                }
 
-		--logger)
-		    shift
-
-		    case "$1" in
-			console|file|both)
-			    LOGGER_OUTPUT_MODE="$1"
-			    #
-			    # Enable log file generation automatically
-			    #
-			    case "$TEST_LOG_OUTPUT_MODE" in
-			        file|both)
-				    LOG_FILE_ENABLE=1
-				    ;;
-			    esac
-			    ;;
-			*)
-			    echo "Invalid logger mode: $1"
-			    exit 1
-			    ;;
-		    esac
-		    ;;
-
-		--testlog)
-		    shift
-
-		    case "$1" in
-			console|file|both|none)
-			    TEST_LOG_OUTPUT_MODE="$1"
-			    #
-			    # Enable log file generation automatically
-			    #
-			    case "$LOGGER_OUTPUT_MODE" in
-				file|both)
-					LOG_FILE_ENABLE=1
-					;;
-			    esac
-			    ;;
-			*)
-			    echo "Invalid test log mode: $1"
-			    exit 1
-			    ;;
-		    esac
-		    ;;
-
-            all)
-
-                MODULE_LIST=(
-                cpu
-                thermal
-                power
-                ddr4
-                emmc
-                nvme
-                sata
-                spinor
-                spi
-                i2c
-                uart
-                gpio
-                ethernet
-                gbe_phy
-                dhcp
-                sshaccess
-                pcie
-                serdes
-                sgmii
-                usb
-                rtc
-                watchdog
-                systemd
-                journald
-                suspend_resume
-                reboot
-                power_cycle
-                crypto
-                long_duration_stress
-                )
-
+                parse_testlog "$1"
                 ;;
+
+            ###################################################################
+            # CSV
+            ###################################################################
+
+            --csv)
+
+		shift
+
+                parse_csv "$1"
+		if [ -n "$1" ] && [[ "$1" != -* ]]
+    		then
+    		    shift
+    		fi
+
+    		continue
+                ;;
+
+            ###################################################################
+            # Unknown Option
+            ###################################################################
+
+            -*)
+
+                echo
+                echo "ERROR : Unknown option : $1"
+                echo
+
+                exit 1
+                ;;
+
+            ###################################################################
+            # Module / Suite
+            ###################################################################
 
             *)
 
-                FOUND=0
-
                 #
-                # Check Module
+                # Run All Modules
                 #
-                for module in "${VALID_MODULES[@]}"
-                do
-                    if [ "$module" = "$1" ]
-                    then
-                        MODULE_LIST+=("$1")
-                        FOUND=1
-                        break
-                    fi
-                done
-
-                #
-                # Check Suite
-                #
-                if [ "$FOUND" -eq 0 ]
+                if [ "$1" = "all" ]
                 then
-                    for suite in "${VALID_SUITES[@]}"
-                    do
-                        if [ "$suite" = "$1" ]
-                        then
-                            MODULE_LIST+=("$1")
-                            FOUND=1
-                            break
-                        fi
-                    done
-                fi
+		    RUN_ALL_MODULES=1
+                    MODULE_LIST=("${AVAILABLE_MODULES[@]}")
 
                 #
-                # Invalid Input
+                # Single Module
                 #
-                if [ "$FOUND" -eq 0 ]
+                elif is_module "$1"
                 then
-                    echo ""
-                    echo "ERROR : Invalid module/suite : $1"
-                    echo ""
 
-                    show_help
+                    add_module "$1"
+
+                #
+                # Suite
+                #
+                elif is_suite "$1"
+                then
+
+                    add_suite "$1"
+
+                #
+                # Unknown Argument
+                #
+                else
+
+                    echo
+                    echo "ERROR : Unknown module/suite : $1"
+                    echo
 
                     exit 1
+
                 fi
                 ;;
 
@@ -325,14 +545,44 @@ parse_arguments()
 
     done
 
-    if [ ${#MODULE_LIST[@]} -eq 0 ]
+    if [ "$RUN_ALL_MODULES" -eq 1 ]
     then
-        echo ""
-        echo "ERROR : No module selected."
-        echo ""
+        log_info "Executing Complete Validation"
+    fi
 
-        show_help
+    ###########################################################################
+    # Validate Selection
+    ###########################################################################
+
+    if [ ${#MODULE_LIST[@]} -eq 0 ] &&
+       [ ${#SUITE_LIST[@]} -eq 0 ]
+    then
+
+        echo
+        echo "ERROR : No Module/Suite Selected."
+        echo
 
         exit 1
+
+    fi
+
+    ###########################################################################
+    # Generate Log Target
+    ###########################################################################
+
+    generate_log_target
+
+    ###########################################################################
+    # Enable Log File Automatically
+    ###########################################################################
+
+    if [ "$LOGGER_OUTPUT_MODE" = "file" ] ||
+       [ "$LOGGER_OUTPUT_MODE" = "both" ] ||
+       [ "$TEST_LOG_OUTPUT_MODE" = "file" ] ||
+       [ "$TEST_LOG_OUTPUT_MODE" = "both" ]
+    then
+
+        LOG_FILE_ENABLE=1
+
     fi
 }

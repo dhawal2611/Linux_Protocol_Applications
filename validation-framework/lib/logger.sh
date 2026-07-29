@@ -4,107 +4,171 @@
 # Description : Logging Library
 ###############################################################################
 
+###############################################################################
+# Colors
+###############################################################################
+
 GREEN="\e[32m"
 RED="\e[31m"
 YELLOW="\e[33m"
 BLUE="\e[34m"
+MAGENTA="\e[35m"
+CYAN="\e[36m"
 NC="\e[0m"
+
+###############################################################################
+# Test Counters
+###############################################################################
 
 PASS_COUNT=0
 FAIL_COUNT=0
 
 ###############################################################################
-# Write Test Logs
+# Write Logger Message
+#
+# LOGGER_OUTPUT_MODE
+#   console
+#   file
+#   both
 ###############################################################################
 
-write_test_log()
+write_logger()
 {
-    local DATA="$1"
-
-    case "$TEST_LOG_OUTPUT_MODE" in
-
-        console)
-            printf "%s\n" "$DATA"
-            ;;
-
-        file)
-            printf "%s\n" "$DATA" >> "$LOG_FILE"
-            ;;
-
-        both)
-            #printf "%s\n" "$DATA" | tee -a "$LOG_FILE" >/dev/null
-            printf "%s\n" "$DATA" | tee -a "$LOG_FILE"
-            ;;
-
-        none)
-            ;;
-
-    esac
-}
-
-###############################################################################
-# Internal Logger
-###############################################################################
-
-write_log()
-{
-    local TYPE="$1"
-    local MESSAGE="$2"
+    local COLOR="$1"
+    local PREFIX="$2"
+    local MESSAGE="$3"
 
     case "$LOGGER_OUTPUT_MODE" in
 
         console)
 
-            case "$TYPE" in
-                INFO) echo -e "${BLUE}[INFO]${NC} $MESSAGE" ;;
-                PASS) echo -e "${GREEN}[PASS]${NC} $MESSAGE" ;;
-                FAIL) echo -e "${RED}[FAIL]${NC} $MESSAGE" ;;
-                WARN) echo -e "${YELLOW}[WARN]${NC} $MESSAGE" ;;
-            esac
+            echo -e "${COLOR}${PREFIX}${NC} ${MESSAGE}"
             ;;
 
         file)
 
-            echo "[$TYPE] $MESSAGE" >> "$LOG_FILE"
+            [ "$LOG_FILE_ENABLE" -eq 1 ] && \
+                echo "${PREFIX} ${MESSAGE}" >> "$LOG_FILE"
             ;;
 
         both)
 
-            case "$TYPE" in
-                INFO) echo -e "${BLUE}[INFO]${NC} $MESSAGE" ;;
-                PASS) echo -e "${GREEN}[PASS]${NC} $MESSAGE" ;;
-                FAIL) echo -e "${RED}[FAIL]${NC} $MESSAGE" ;;
-                WARN) echo -e "${YELLOW}[WARN]${NC} $MESSAGE" ;;
-            esac
+            echo -e "${COLOR}${PREFIX}${NC} ${MESSAGE}"
 
-            echo "[$TYPE] $MESSAGE" >> "$LOG_FILE"
+            [ "$LOG_FILE_ENABLE" -eq 1 ] && \
+                echo "${PREFIX} ${MESSAGE}" >> "$LOG_FILE"
             ;;
+
+        *)
+
+            echo -e "${COLOR}${PREFIX}${NC} ${MESSAGE}"
+            ;;
+
     esac
 }
+
 ###############################################################################
-# Public APIs
+# INFO
 ###############################################################################
 
 log_info()
 {
-    write_log INFO "$1"
+    write_logger "$BLUE" "[INFO]" "$1"
 }
+
+###############################################################################
+# PASS
+###############################################################################
 
 log_pass()
 {
-    write_log PASS "$1"
-    PASS_COUNT=$((PASS_COUNT+1))
+    PASS_COUNT=$((PASS_COUNT + 1))
+
+    write_logger "$GREEN" "[PASS]" "$1"
 }
+
+###############################################################################
+# FAIL
+###############################################################################
 
 log_fail()
 {
-    write_log FAIL "$1"
-    FAIL_COUNT=$((FAIL_COUNT+1))
+    FAIL_COUNT=$((FAIL_COUNT + 1))
+
+    write_logger "$RED" "[FAIL]" "$1"
 }
+
+###############################################################################
+# ERROR
+###############################################################################
+
+log_error()
+{
+    write_logger "$RED" "[ERROR]" "$1"
+}
+
+###############################################################################
+# WARNING
+###############################################################################
 
 log_warn()
 {
-    write_log WARN "$1"
+    write_logger "$YELLOW" "[WARN]" "$1"
+}
+
+###############################################################################
+# DEBUG
+###############################################################################
+
+log_debug()
+{
+    write_logger "$CYAN" "[DEBUG]" "$1"
+}
+
+###############################################################################
+# SECTION HEADER
+###############################################################################
+
+log_section()
+{
+    local TITLE="$1"
+
+    local DATA="
+===============================================================================
+$TITLE
+==============================================================================="
+
+    write_test_log "$DATA"
+}
+
+###############################################################################
+# SUB SECTION
+###############################################################################
+
+log_subsection()
+{
+    local TITLE="$1"
+
+    local DATA="
+-------------------------------------------------------------------------------
+$TITLE
+-------------------------------------------------------------------------------"
+
+    write_test_log "$DATA"
+}
+
+###############################################################################
+# Framework Banner
+###############################################################################
+
+log_banner()
+{
+    local DATA="
+===============================================================================
+               Embedded Linux Validation Framework
+==============================================================================="
+
+    write_test_log "$DATA"
 }
 
 ###############################################################################
@@ -113,10 +177,79 @@ log_warn()
 
 print_summary()
 {
-    echo
-    echo "=========================="
-    echo "PASS : $PASS_COUNT"
-    echo "FAIL : $FAIL_COUNT"
-    echo "Log  : $LOG_FILE"
-    echo "=========================="
+    local DATA="
+===============================================================================
+Validation Summary
+===============================================================================
+
+PASS            : $PASS_COUNT
+FAIL            : $FAIL_COUNT"
+
+    if [ "$LOG_FILE_ENABLE" -eq 1 ]
+    then
+        DATA="${DATA}
+Log File        : $LOG_FILE"
+    fi
+
+    if [ "$CSV_REPORT_ENABLE" -eq 1 ]
+    then
+        DATA="${DATA}
+CSV Report      : $CSV_FILE"
+    fi
+
+    DATA="${DATA}
+
+==============================================================================="
+
+    #
+    # Summary always appears on the console.
+    #
+    echo "$DATA"
+
+    #
+    # Save summary to log file if enabled.
+    #
+    if [ "$LOG_FILE_ENABLE" -eq 1 ]
+    then
+        echo "$DATA" >> "$LOG_FILE"
+    fi
+}
+
+###############################################################################
+# Write Test Log
+###############################################################################
+
+write_test_log()
+{
+    local DATA="$1"
+
+    #
+    # Logging Disabled
+    #
+    [ "$LOG_FILE_ENABLE" -eq 0 ] && return
+
+    case "$TEST_LOG_OUTPUT_MODE" in
+
+        console)
+
+            printf "%s\n" "$DATA"
+            ;;
+
+        file)
+
+            printf "%s\n" "$DATA" >> "$LOG_FILE"
+            ;;
+
+        both)
+
+            printf "%s\n" "$DATA"
+
+            printf "%s\n" "$DATA" >> "$LOG_FILE"
+            ;;
+
+        none)
+
+            ;;
+
+    esac
 }

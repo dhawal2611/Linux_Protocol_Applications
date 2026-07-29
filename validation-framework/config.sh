@@ -1,5 +1,26 @@
 #!/bin/bash
 
+
+MODULE_LIST=()
+
+SUITE_SELECTED=0
+
+LOOP_MODE=0
+
+CSV_REPORT_ENABLE=0
+
+CSV_FILE=""
+
+LOG_TARGET=""
+
+LOGGER_OUTPUT_MODE="console"
+
+TEST_LOG_OUTPUT_MODE="console"
+
+RUN_ALL_MODULES=0
+
+FRAMEWORK_VERSION="1.0.0"
+
 LOG_DIR="./logs"
 
 mkdir -p "$LOG_DIR"

@@ -7,31 +7,42 @@
 ###############################################################################
 # Global Variables
 ###############################################################################
+
+#
+# Last Executed Command Information
+#
 COMMAND_OUTPUT=""
 COMMAND_STATUS=0
+COMMAND_EXEC_TIME=0
+
+COMMAND_START_TIME=""
+COMMAND_END_TIME=""
 
 LAST_TEST_ID=""
 LAST_TEST_NAME=""
+LAST_COMMAND=""
+LAST_MODULE=""
 
 ###############################################################################
 # Escape CSV Field
 ###############################################################################
+
 csv_escape()
 {
     local DATA="$1"
 
     #
-    # Remove CR
+    # Remove Carriage Return
     #
     DATA="${DATA//$'\r'/}"
 
     #
-    # Replace newline with " | "
+    # Replace newline with separator
     #
     DATA="${DATA//$'\n'/ | }"
 
     #
-    # Escape quotes
+    # Escape Quotes
     #
     DATA="${DATA//\"/\"\"}"
 
@@ -39,8 +50,79 @@ csv_escape()
 }
 
 ###############################################################################
+# Validate Command Output
+#
+# Usage:
+#   validate_output "Architecture"
+#
+###############################################################################
+
+validate_output()
+{
+    local PATTERN="$1"
+
+    echo "$COMMAND_OUTPUT" | grep -q "$PATTERN"
+}
+
+
+###############################################################################
+# Create CSV Header
+###############################################################################
+
+csv_create_header()
+{
+    #
+    # CSV Disabled
+    #
+    [ "$CSV_REPORT_ENABLE" -eq 0 ] && return
+
+    printf '"Module","Test ID","Test Name","Command","Result","Exit Status","Execution Time(s)","Start Time","End Time","Output"\n' \
+    > "$CSV_FILE"
+}
+
+###############################################################################
+# Write CSV Entry
+###############################################################################
+
+csv_write()
+{
+    local RESULT="$1"
+
+    #
+    # CSV Disabled
+    #
+    [ "$CSV_REPORT_ENABLE" -eq 0 ] && return
+
+    local MODULE
+    local TESTID
+    local TESTNAME
+    local CMD
+    local OUTPUT
+
+    MODULE=$(csv_escape "$LAST_MODULE")
+    TESTID=$(csv_escape "$LAST_TEST_ID")
+    TESTNAME=$(csv_escape "$LAST_TEST_NAME")
+    CMD=$(csv_escape "$LAST_COMMAND")
+    OUTPUT=$(csv_escape "$COMMAND_OUTPUT")
+
+    printf '"%s","%s","%s","%s","%s","%s","%s","%s","%s","%s"\n' \
+        "$MODULE" \
+        "$TESTID" \
+        "$TESTNAME" \
+        "$CMD" \
+        "$RESULT" \
+        "$COMMAND_STATUS" \
+        "$COMMAND_EXEC_TIME" \
+        "$COMMAND_START_TIME" \
+        "$COMMAND_END_TIME" \
+        "$OUTPUT" \
+        >> "$CSV_FILE"
+}
+
+###############################################################################
 # Execute Command
 ###############################################################################
+
 run_command()
 {
     local TEST_ID="$1"
@@ -49,24 +131,39 @@ run_command()
 
     local START_TIME
     local END_TIME
-    local EXEC_TIME
-    local START_TIME_STR
-    local END_TIME_STR
-    local RESULT
-    local MODULE_NAME
-    local CSV_OUTPUT
 
-    START_TIME_STR=$(date "+%Y-%m-%d %H:%M:%S")
-    START_TIME=$(date +%s)
-
+    #
+    # Save Test Information
+    #
     LAST_TEST_ID="$TEST_ID"
     LAST_TEST_NAME="$TEST_NAME"
+    LAST_COMMAND="$CMD"
 
     #
-    # Test Information
+    # Derive Module Name from Test ID
     #
-    log_info "[$TEST_ID] $TEST_NAME"
+    LAST_MODULE="${TEST_ID%%-*}"
 
+    #
+    # Empty Command Check
+    #
+    if [ -z "$CMD" ]
+    then
+        COMMAND_OUTPUT="ERROR : Empty Command"
+        COMMAND_STATUS=1
+
+        return 1
+    fi
+
+    #
+    # Capture Start Time
+    #
+    START_TIME=$(date +%s)
+    COMMAND_START_TIME=$(date "+%Y-%m-%d %H:%M:%S")
+
+    #
+    # Print Test Header
+    #
     write_test_log "
 ################################################################################
 # TEST START
@@ -74,7 +171,7 @@ run_command()
 
 Test ID         : $TEST_ID
 Test Name       : $TEST_NAME
-Start Time      : $START_TIME_STR
+Start Time      : $COMMAND_START_TIME
 Command         : $CMD
 
 --------------------------------------------------------------------------------
@@ -83,65 +180,47 @@ Command Output
 "
 
     #
-    # Empty Command Check
-    #
-    if [ -z "$CMD" ]
-    then
-        write_test_log "ERROR : Empty Command"
-
-        COMMAND_OUTPUT=""
-        COMMAND_STATUS=1
-
-        log_fail "$TEST_ID"
-
-        write_test_log "
---------------------------------------------------------------------------------
-Test Summary
---------------------------------------------------------------------------------
-
-Result          : FAIL
-Exit Status     : 1
-Execution Time  : 0 sec
-End Time        : $(date "+%Y-%m-%d %H:%M:%S")
-
-################################################################################
-# TEST END : $TEST_ID
-################################################################################
-"
-
-        return 1
-    fi
-
-    #
     # Execute Command
     #
     COMMAND_OUTPUT=$(eval "$CMD" 2>&1)
     COMMAND_STATUS=$?
 
     #
-    # Write Command Output
+    # Print Command Output
     #
     write_test_log "$COMMAND_OUTPUT"
 
     #
-    # Execution Time
+    # Capture End Time
     #
     END_TIME=$(date +%s)
-    END_TIME_STR=$(date "+%Y-%m-%d %H:%M:%S")
 
-    EXEC_TIME=$((END_TIME - START_TIME))
+    COMMAND_EXEC_TIME=$((END_TIME - START_TIME))
+    COMMAND_END_TIME=$(date "+%Y-%m-%d %H:%M:%S")
 
     #
-    # Test Result
+    # Return command execution status.
     #
-    if [ "$COMMAND_STATUS" -eq 0 ]
-    then
-        RESULT="PASS"
-        log_pass "$TEST_ID"
-    else
-        RESULT="FAIL"
-        log_fail "$TEST_ID"
-    fi
+    # NOTE:
+    # PASS / FAIL is NOT decided here.
+    # The calling module validates COMMAND_OUTPUT
+    # and invokes test_pass() or test_fail().
+    #
+    return "$COMMAND_STATUS"
+}
+
+###############################################################################
+# Test Pass
+###############################################################################
+
+test_pass()
+{
+    local TEST_ID="$1"
+
+    #
+    # Console/File PASS message
+    #
+    log_pass "$TEST_ID"
 
     #
     # Test Summary
@@ -151,10 +230,10 @@ End Time        : $(date "+%Y-%m-%d %H:%M:%S")
 Test Summary
 --------------------------------------------------------------------------------
 
-Result          : $RESULT
+Result          : PASS
 Exit Status     : $COMMAND_STATUS
-Execution Time  : ${EXEC_TIME} sec
-End Time        : $END_TIME_STR
+Execution Time  : ${COMMAND_EXEC_TIME} sec
+End Time        : $COMMAND_END_TIME
 
 ################################################################################
 # TEST END : $TEST_ID
@@ -162,38 +241,56 @@ End Time        : $END_TIME_STR
 "
 
     #
-    # CSV Report
+    # Update CSV Report
     #
-    if [ "$CSV_REPORT_ENABLE" -eq 1 ] && [ -n "$CSV_FILE" ]
-    then
-        MODULE_NAME="${TEST_ID%%-*}"
-        MODULE_NAME=$(csv_escape "$MODULE_NAME")
-	TEST_ID=$(csv_escape "$TEST_ID")
-	TEST_NAME=$(csv_escape "$TEST_NAME")
-	CMD=$(csv_escape "$CMD")
-	RESULT=$(csv_escape "$RESULT")
-	CSV_OUTPUT=$(csv_escape "$COMMAND_OUTPUT")
+    csv_write "PASS"
 
-	printf '"%s","%s","%s","%s","%s","%s","%s","%s","%s","%s"\n' \
-	    "$MODULE_NAME" \
-	    "$TEST_ID" \
-	    "$TEST_NAME" \
-	    "$CMD" \
-	    "$RESULT" \
-	    "$COMMAND_STATUS" \
-	    "$EXEC_TIME" \
-	    "$START_TIME_STR" \
-	    "$END_TIME_STR" \
-	    "$CSV_OUTPUT" \
-	>> "$CSV_FILE"
-    fi
+    return 0
+}
 
-    return "$COMMAND_STATUS"
+###############################################################################
+# Test Fail
+###############################################################################
+
+test_fail()
+{
+    local TEST_ID="$1"
+
+    #
+    # Console/File FAIL message
+    #
+    log_fail "$TEST_ID"
+
+    #
+    # Test Summary
+    #
+    write_test_log "
+--------------------------------------------------------------------------------
+Test Summary
+--------------------------------------------------------------------------------
+
+Result          : FAIL
+Exit Status     : $COMMAND_STATUS
+Execution Time  : ${COMMAND_EXEC_TIME} sec
+End Time        : $COMMAND_END_TIME
+
+################################################################################
+# TEST END : $TEST_ID
+################################################################################
+"
+
+    #
+    # Update CSV Report
+    #
+    csv_write "FAIL"
+
+    return 1
 }
 
 ###############################################################################
 # Manual Test
 ###############################################################################
+
 manual_test()
 {
     local TEST_ID="$1"
@@ -201,40 +298,32 @@ manual_test()
     local DESCRIPTION="$3"
     local EXPECTED="$4"
 
-    local RESULT
-    local START_TIME_STR
-    local END_TIME_STR
-    local MODULE_NAME
-
-    START_TIME_STR=$(date "+%Y-%m-%d %H:%M:%S")
-
     LAST_TEST_ID="$TEST_ID"
     LAST_TEST_NAME="$TEST_NAME"
+    LAST_COMMAND="Manual Test"
+    LAST_MODULE="${TEST_ID%%-*}"
+
+    COMMAND_OUTPUT=""
+    COMMAND_STATUS=0
+    COMMAND_EXEC_TIME=0
+
+    COMMAND_START_TIME=$(date "+%Y-%m-%d %H:%M:%S")
 
     log_info "[$TEST_ID] $TEST_NAME"
 
-    write_test_log "
-################################################################################
-# MANUAL TEST
-################################################################################
-
-Test ID         : $TEST_ID
-Test Name       : $TEST_NAME
-Start Time      : $START_TIME_STR
-
-Description
------------
-$DESCRIPTION
-
-Expected Result
----------------
-$EXPECTED
-
-Press 'p' for PASS
-Press 'f' for FAIL
-
-################################################################################
-"
+    echo
+    echo "======================================================================="
+    echo "MANUAL TEST REQUIRED"
+    echo "======================================================================="
+    echo
+    echo "$DESCRIPTION"
+    echo
+    echo "Expected Result:"
+    echo "    $EXPECTED"
+    echo
+    echo "Press 'p' for PASS"
+    echo "Press 'f' for FAIL"
+    echo "======================================================================="
 
     while true
     do
@@ -243,70 +332,31 @@ Press 'f' for FAIL
         case "$RESULT" in
 
             p|P)
-                RESULT="PASS"
+
                 COMMAND_STATUS=0
-                COMMAND_OUTPUT="Manual Test : PASS"
-                log_pass "$TEST_ID"
-                break
+                COMMAND_END_TIME=$(date "+%Y-%m-%d %H:%M:%S")
+
+                test_pass "$TEST_ID"
+
+                return 0
                 ;;
 
             f|F)
-                RESULT="FAIL"
+
                 COMMAND_STATUS=1
-                COMMAND_OUTPUT="Manual Test : FAIL"
-                log_fail "$TEST_ID"
-                break
+                COMMAND_END_TIME=$(date "+%Y-%m-%d %H:%M:%S")
+
+                test_fail "$TEST_ID"
+
+                return 1
                 ;;
 
             *)
+
                 echo "Invalid input. Please enter p or f."
                 ;;
+
         esac
+
     done
-
-    END_TIME_STR=$(date "+%Y-%m-%d %H:%M:%S")
-
-    write_test_log "
---------------------------------------------------------------------------------
-Manual Test Result
---------------------------------------------------------------------------------
-
-Result          : $RESULT
-Completion Time : $END_TIME_STR
-
-################################################################################
-# TEST END : $TEST_ID
-################################################################################
-"
-
-    if [ "$CSV_REPORT_ENABLE" -eq 1 ] && [ -n "$CSV_FILE" ]
-    then
-        MODULE_NAME="${TEST_ID%%-*}"
-        MODULE_NAME=$(csv_escape "$MODULE_NAME")
-	TEST_ID=$(csv_escape "$TEST_ID")
-	TEST_NAME=$(csv_escape "$TEST_NAME")
-	RESULT=$(csv_escape "$RESULT")
-	COMMAND_OUTPUT=$(csv_escape "$COMMAND_OUTPUT")
-
-	printf '"%s","%s","%s","%s","%s","%s","%s","%s","%s","%s"\n' \
-	"$MODULE_NAME" \
-	"$TEST_ID" \
-	"$TEST_NAME" \
-	"Manual Test" \
-	"$RESULT" \
-	"$COMMAND_STATUS" \
-	"0" \
-	"$START_TIME_STR" \
-	"$END_TIME_STR" \
-	"$COMMAND_OUTPUT" \
-	>> "$CSV_FILE"
-    fi
-
-    if [ "$COMMAND_STATUS" -eq 0 ]
-    then
-        return 0
-    else
-        return 1
-    fi
 }
-
