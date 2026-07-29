@@ -42,6 +42,12 @@ discover_modules_and_suites()
     done
 
     #
+    # Sort Modules Alphabetically
+    #
+    IFS=$'\n' AVAILABLE_MODULES=($(printf "%s\n" "${AVAILABLE_MODULES[@]}" | sort))
+    unset IFS
+
+    #
     # Discover Suites
     #
     AVAILABLE_SUITES=()
@@ -52,6 +58,12 @@ discover_modules_and_suites()
 
         AVAILABLE_SUITES+=("$(basename "$FILE" .sh)")
     done
+
+    #
+    # Sort Suites Alphabetically
+    #
+    IFS=$'\n' AVAILABLE_SUITES=($(printf "%s\n" "${AVAILABLE_SUITES[@]}" | sort))
+    unset IFS
 }
 
 ###############################################################################
@@ -372,6 +384,9 @@ show_help()
     echo "Combined example:"
     echo "    ./validate.sh cpu ddr --logger both --testlog file --csv --loop"
     echo
+    echo "Run all modules:"
+    echo "    ./validate.sh all"
+    echo
     echo "==============================================================================="
     echo "NOTES"
     echo "==============================================================================="
@@ -397,6 +412,7 @@ show_help()
 
 parse_arguments()
 {
+    RUN_ALL_MODULES=0
     MODULE_LIST=()
     SUITE_LIST=()
 
@@ -474,6 +490,7 @@ parse_arguments()
 		shift
 
                 parse_csv "$1"
+
 		if [ -n "$1" ] && [[ "$1" != -* ]]
     		then
     		    shift
@@ -481,6 +498,14 @@ parse_arguments()
 
     		continue
                 ;;
+
+            ###################################################################
+            # Version
+            ###################################################################
+	    --version)
+	        echo "Embedded Linux Validation Framework v1.0.0"
+	        exit 0
+	        ;;
 
             ###################################################################
             # Unknown Option
@@ -504,15 +529,15 @@ parse_arguments()
                 #
                 # Run All Modules
                 #
-                if [ "$1" = "all" ]
-                then
-		    RUN_ALL_MODULES=1
-                    MODULE_LIST=("${AVAILABLE_MODULES[@]}")
+                #if [ "$1" = "all" ]
+                #then
+		#    RUN_ALL_MODULES=1
+                #    MODULE_LIST=("${AVAILABLE_MODULES[@]}")
 
                 #
                 # Single Module
                 #
-                elif is_module "$1"
+                if is_module "$1"
                 then
 
                     add_module "$1"
@@ -548,6 +573,25 @@ parse_arguments()
     if [ "$RUN_ALL_MODULES" -eq 1 ]
     then
         log_info "Executing Complete Validation"
+    fi
+
+    ###########################################################################
+    # Validate Mixed Selection
+    ###########################################################################
+
+    if [ ${#MODULE_LIST[@]} -gt 0 ] &&
+       [ ${#SUITE_LIST[@]} -gt 0 ]
+    then
+
+        echo
+        echo "ERROR : Modules and Suites cannot be used together."
+        echo "Please select either:"
+        echo "  • One or more modules"
+        echo "  • One suite"
+        echo
+
+        exit 1
+
     fi
 
     ###########################################################################

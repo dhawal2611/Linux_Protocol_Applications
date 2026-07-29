@@ -1,5 +1,11 @@
 #!/bin/bash
 
+###############################################################################
+# Framework Information
+###############################################################################
+
+FRAMEWORK_NAME="Embedded Linux Validation Framework"
+FRAMEWORK_VERSION="1.0.0"
 
 MODULE_LIST=()
 

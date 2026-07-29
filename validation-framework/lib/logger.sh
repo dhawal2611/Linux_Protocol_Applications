@@ -253,3 +253,100 @@ write_test_log()
 
     esac
 }
+
+###############################################################################
+# Write Test Header
+###############################################################################
+
+write_test_header()
+{
+    write_test_log ""
+    write_test_log "################################################################################"
+    write_test_log "# TEST START"
+    write_test_log "################################################################################"
+    write_test_log ""
+
+    write_key_value "Test ID" "$TEST_ID"
+    write_key_value "Test Name" "$TEST_NAME"
+    write_key_value "Start Time" "$COMMAND_START_TIME"
+
+    if [ -n "$LAST_COMMAND" ]
+    then
+        write_key_value "Command" "$LAST_COMMAND"
+    fi
+
+    write_test_log ""
+}
+
+###############################################################################
+# Write Command Output
+###############################################################################
+
+write_command_output()
+{
+    write_section "Command Output"
+
+    write_test_log "$COMMAND_OUTPUT"
+
+    write_test_log ""
+}
+
+###############################################################################
+# Write Validation Result
+###############################################################################
+
+write_validation_result()
+{
+    write_section "Validation Result"
+
+    write_key_value "Result" "$TEST_RESULT"
+    write_key_value "Message" "$TEST_MESSAGE"
+
+    write_test_log ""
+}
+
+###############################################################################
+# Write Test Footer
+###############################################################################
+
+write_test_footer()
+{
+    write_section "Execution Summary"
+
+    write_key_value "Exit Status" "$COMMAND_STATUS"
+    write_key_value "Execution Time" "$(format_duration "$COMMAND_EXEC_TIME")"
+    write_key_value "End Time" "$COMMAND_END_TIME"
+
+    write_test_log ""
+
+    write_test_log "################################################################################"
+    write_test_log "# TEST END : $TEST_ID"
+    write_test_log "################################################################################"
+
+    write_test_log ""
+}
+
+###############################################################################
+# Write Section
+###############################################################################
+
+write_section()
+{
+    local TITLE="$1"
+
+    write_test_log "--------------------------------------------------------------------------------"
+    write_test_log "$TITLE"
+    write_test_log "--------------------------------------------------------------------------------"
+}
+
+###############################################################################
+# Write Key Value Pair
+###############################################################################
+
+write_key_value()
+{
+    printf "%-16s : %s\n" "$1" "$2" | while read -r LINE
+    do
+        write_test_log "$LINE"
+    done
+}

@@ -11,11 +11,28 @@ source "$SCRIPT_DIR/lib/logger.sh"
 source "$SCRIPT_DIR/lib/common.sh"
 source "$SCRIPT_DIR/lib/arguments.sh"
 source "$SCRIPT_DIR/lib/command.sh"
+source "$SCRIPT_DIR/lib/assertions.sh"
+source "$SCRIPT_DIR/lib/test_registry.sh"
+source "$SCRIPT_DIR/lib/framework_check.sh"
 
 LOOP_MODE=0
 
+###############################################################################
+# Framework Self Check
+###############################################################################
+
+framework_self_check
+
+###############################################################################
 # Parse command-line arguments
+###############################################################################
 parse_arguments "$@"
+
+###############################################################################
+# Initialize Framework
+###############################################################################
+
+initialize_framework
 
 # Handle Ctrl+C
 trap cleanup SIGINT
@@ -67,67 +84,172 @@ then
 fi
 
 ###############################################################################
-# Execute Modules / Suites
+# Execute a Single Module
 ###############################################################################
-run_modules()
+
+run_single_module()
 {
-    for module in "${MODULE_LIST[@]}"
-    do
+    local MODULE="$1"
 
-        #######################################################################
-        # Execute Individual Module
-        #######################################################################
-        if [ -f "$SCRIPT_DIR/modules/${module}.sh" ]
+    if [ ! -f "$SCRIPT_DIR/modules/${MODULE}.sh" ]
+    then
+        log_error "Module '${MODULE}' not found."
+        return 1
+    fi
+
+    log_info ""
+    log_info "Running Module : ${MODULE}"
+
+    #
+    # Clear Previous Module Variables
+    #
+    unset REQUIRED_COMMANDS
+
+    #
+    # Load Module
+    #
+    clear_test_registry
+    source "$SCRIPT_DIR/modules/${MODULE}.sh"
+
+    #
+    # Verify Module Dependencies
+    #
+    if declare -p REQUIRED_COMMANDS >/dev/null 2>&1
+    then
+        check_dependencies "${REQUIRED_COMMANDS[@]}"
+        if [ $? -ne 0 ]
         then
-            echo
-            log_info "Running Module : ${module}"
-
-            source "$SCRIPT_DIR/modules/${module}.sh"
-
-            run_test
-
-        #######################################################################
-        # Execute Test Suite
-        #######################################################################
-        elif [ -f "$SCRIPT_DIR/suites/${module}.sh" ]
-        then
-            source "$SCRIPT_DIR/suites/${module}.sh"
-
-            for suite_module in "${MODULE_LIST[@]}"
-            do
-                echo
-                log_info "Running Module : ${suite_module}"
-
-                source "$SCRIPT_DIR/modules/${suite_module}.sh"
-
-                run_test
-            done
-
-        #######################################################################
-        # Invalid Module
-        #######################################################################
-        else
-            log_error "Module '${module}' not found."
-
+            log_error "Skipping Module : ${MODULE}"
             return 1
         fi
+    fi
+
+    #
+    # Execute Module
+    #
+    run_registered_tests
+
+}
+
+###############################################################################
+# Execute Selected Modules
+###############################################################################
+
+run_modules()
+{
+    local MODULE
+
+    for MODULE in "${MODULE_LIST[@]}"
+    do
+        run_single_module "$MODULE"
     done
 }
 
 ###############################################################################
-# Main
+# Execute Single Suite
 ###############################################################################
+
+run_single_suite()
+{
+    local SUITE="$1"
+
+    #
+    # Verify Suite Exists
+    #
+    if [ ! -f "$SCRIPT_DIR/suites/${SUITE}.sh" ]
+    then
+        log_error "Suite '${SUITE}' not found."
+        return 1
+    fi
+
+    ###########################################################################
+    # Suite Start
+    ###########################################################################
+
+    log_info ""
+    log_info "============================================================"
+    log_info "Starting Suite : ${SUITE}"
+    log_info "============================================================"
+
+    #
+    # Clear Module List
+    #
+    MODULE_LIST=()
+
+    #
+    # Load Suite
+    #
+    source "$SCRIPT_DIR/suites/${SUITE}.sh"
+    log_info "Modules in Suite : ${#MODULE_LIST[@]}"
+
+    #
+    # Execute Modules
+    #
+    run_modules
+
+    ###########################################################################
+    # Suite End
+    ###########################################################################
+
+    log_info "============================================================"
+    log_info "Suite Completed : ${SUITE}"
+    log_info "============================================================"
+    log_info ""
+}
+
+###############################################################################
+# Execute Selected Suites
+###############################################################################
+
+run_suites()
+{
+    local SUITE
+
+    for SUITE in "${SUITE_LIST[@]}"
+    do
+        run_single_suite "$SUITE"
+    done
+}
+
+###############################################################################
+# Main Execution
+###############################################################################
+
+execute_validation()
+{
+    #
+    # Run Modules
+    #
+    if [ ${#MODULE_LIST[@]} -gt 0 ]
+    then
+        run_modules
+    fi
+
+    #
+    # Run Suites
+    #
+    if [ ${#SUITE_LIST[@]} -gt 0 ]
+    then
+        run_suites
+    fi
+}
 
 if [ "$LOOP_MODE" -eq 1 ]
 then
+
     while true
     do
-        run_modules
+        execute_validation
         sleep 2
     done
+
 else
-    run_modules
+
+    execute_validation
+
 fi
+
+print_summary
 
 ###############################################################################
 # Print Final Summary

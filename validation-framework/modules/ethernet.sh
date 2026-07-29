@@ -124,3 +124,17 @@ run_test()
     log_info "Ethernet Validation Completed"
     log_info "========================================="
 }
+
+register_test \
+    -i "ETH-001" \
+    -f eth_001 \
+    -n "Verify Ethernet Link" \
+    -c network \
+    -t auto \
+    -p high \
+    -o 30 \
+    -g "ethernet,link" \
+    -w "Networking Team" \
+    -b "RPi4,IMX6ULL" \
+    -e yes \
+    -d "Verify Ethernet link state and speed."

@@ -24,6 +24,29 @@ LAST_COMMAND=""
 LAST_MODULE=""
 
 ###############################################################################
+# Test Result Variables
+###############################################################################
+
+TEST_RESULT=""
+TEST_MESSAGE=""
+
+###############################################################################
+# Framework Variables
+###############################################################################
+
+#
+# Current Test Information
+#
+TEST_ID=""
+TEST_NAME=""
+
+#
+# Validation Result
+#
+TEST_RESULT=""
+TEST_MESSAGE=""
+
+###############################################################################
 # Escape CSV Field
 ###############################################################################
 
@@ -125,33 +148,48 @@ csv_write()
 
 run_command()
 {
-    local TEST_ID="$1"
-    local TEST_NAME="$2"
+    #
+    # Initialize Test Variables
+    #
+    TEST_ID="$1"
+    TEST_NAME="$2"
+
     local CMD="$3"
 
     local START_TIME
     local END_TIME
 
     #
-    # Save Test Information
+    # Reset Previous Test Data
+    #
+    COMMAND_OUTPUT=""
+    COMMAND_STATUS=0
+    COMMAND_EXEC_TIME=0
+    COMMAND_START_TIME=""
+    COMMAND_END_TIME=""
+
+    TEST_RESULT=""
+    TEST_MESSAGE=""
+
+    #
+    # Save Current Test Information
     #
     LAST_TEST_ID="$TEST_ID"
     LAST_TEST_NAME="$TEST_NAME"
     LAST_COMMAND="$CMD"
 
     #
-    # Derive Module Name from Test ID
+    # Derive Module Name
     #
     LAST_MODULE="${TEST_ID%%-*}"
 
     #
-    # Empty Command Check
+    # Validate Command
     #
     if [ -z "$CMD" ]
     then
         COMMAND_OUTPUT="ERROR : Empty Command"
         COMMAND_STATUS=1
-
         return 1
     fi
 
@@ -159,36 +197,25 @@ run_command()
     # Capture Start Time
     #
     START_TIME=$(date +%s)
-    COMMAND_START_TIME=$(date "+%Y-%m-%d %H:%M:%S")
+    COMMAND_START_TIME=$(get_timestamp)
 
     #
-    # Print Test Header
+    # Test Header
     #
-    write_test_log "
-################################################################################
-# TEST START
-################################################################################
-
-Test ID         : $TEST_ID
-Test Name       : $TEST_NAME
-Start Time      : $COMMAND_START_TIME
-Command         : $CMD
-
---------------------------------------------------------------------------------
-Command Output
---------------------------------------------------------------------------------
-"
+    write_test_header
 
     #
     # Execute Command
     #
-    COMMAND_OUTPUT=$(eval "$CMD" 2>&1)
+    COMMAND_OUTPUT="$(
+        eval "$CMD" 2>&1
+    )"
     COMMAND_STATUS=$?
 
     #
-    # Print Command Output
+    # Save Command Output
     #
-    write_test_log "$COMMAND_OUTPUT"
+    write_command_output
 
     #
     # Capture End Time
@@ -196,15 +223,20 @@ Command Output
     END_TIME=$(date +%s)
 
     COMMAND_EXEC_TIME=$((END_TIME - START_TIME))
-    COMMAND_END_TIME=$(date "+%Y-%m-%d %H:%M:%S")
+    COMMAND_END_TIME=$(get_timestamp)
 
     #
-    # Return command execution status.
+    # Test Footer
+    #
+    write_test_footer
+
+    #
+    # Return Command Status
     #
     # NOTE:
-    # PASS / FAIL is NOT decided here.
-    # The calling module validates COMMAND_OUTPUT
-    # and invokes test_pass() or test_fail().
+    # This function ONLY executes the command.
+    # PASS / FAIL is decided by the calling module after validating
+    # COMMAND_OUTPUT and/or COMMAND_STATUS.
     #
     return "$COMMAND_STATUS"
 }
@@ -215,12 +247,10 @@ Command Output
 
 test_pass()
 {
-    local TEST_ID="$1"
-
     #
     # Console/File PASS message
     #
-    log_pass "$TEST_ID"
+    #log_pass "$TEST_ID"
 
     #
     # Test Summary
@@ -254,12 +284,10 @@ End Time        : $COMMAND_END_TIME
 
 test_fail()
 {
-    local TEST_ID="$1"
-
     #
     # Console/File FAIL message
     #
-    log_fail "$TEST_ID"
+    #log_fail "$TEST_ID"
 
     #
     # Test Summary
@@ -293,28 +321,55 @@ End Time        : $COMMAND_END_TIME
 
 manual_test()
 {
-    local TEST_ID="$1"
-    local TEST_NAME="$2"
+    #
+    # Initialize Test Variables
+    #
+    TEST_ID="$1"
+    TEST_NAME="$2"
+
     local DESCRIPTION="$3"
     local EXPECTED="$4"
+
+    TEST_RESULT=""
+    TEST_MESSAGE=""
+
+    COMMAND_OUTPUT="Manual Test"
+    COMMAND_STATUS=0
+    COMMAND_EXEC_TIME=0
 
     LAST_TEST_ID="$TEST_ID"
     LAST_TEST_NAME="$TEST_NAME"
     LAST_COMMAND="Manual Test"
     LAST_MODULE="${TEST_ID%%-*}"
 
-    COMMAND_OUTPUT=""
-    COMMAND_STATUS=0
-    COMMAND_EXEC_TIME=0
+    COMMAND_START_TIME=$(get_timestamp)
 
-    COMMAND_START_TIME=$(date "+%Y-%m-%d %H:%M:%S")
+    #
+    # Test Header
+    #
+    COMMAND_START_TIME=$(get_timestamp)
 
-    log_info "[$TEST_ID] $TEST_NAME"
+    LAST_COMMAND="Manual Test"
 
-    echo
-    echo "======================================================================="
-    echo "MANUAL TEST REQUIRED"
-    echo "======================================================================="
+    write_test_header
+
+    write_test_log "Description"
+    write_test_log "--------------------------------------------------------------------------------"
+    write_test_log "$DESCRIPTION"
+
+    write_test_log ""
+
+    write_test_log "Expected Result"
+    write_test_log "--------------------------------------------------------------------------------"
+    write_test_log "$EXPECTED"
+
+    write_test_log ""
+
+    #
+    # Console Prompt
+    #
+    banner "MANUAL TEST REQUIRED"
+
     echo
     echo "$DESCRIPTION"
     echo
@@ -323,7 +378,7 @@ manual_test()
     echo
     echo "Press 'p' for PASS"
     echo "Press 'f' for FAIL"
-    echo "======================================================================="
+    separator
 
     while true
     do
@@ -334,9 +389,12 @@ manual_test()
             p|P)
 
                 COMMAND_STATUS=0
-                COMMAND_END_TIME=$(date "+%Y-%m-%d %H:%M:%S")
+                COMMAND_END_TIME=$(get_timestamp)
 
-                test_pass "$TEST_ID"
+                TEST_RESULT="PASS"
+                TEST_MESSAGE="Manual verification passed."
+
+                finalize_test
 
                 return 0
                 ;;
@@ -344,9 +402,12 @@ manual_test()
             f|F)
 
                 COMMAND_STATUS=1
-                COMMAND_END_TIME=$(date "+%Y-%m-%d %H:%M:%S")
+                COMMAND_END_TIME=$(get_timestamp)
 
-                test_fail "$TEST_ID"
+                TEST_RESULT="FAIL"
+                TEST_MESSAGE="Manual verification failed."
+
+                finalize_test
 
                 return 1
                 ;;
@@ -359,4 +420,51 @@ manual_test()
         esac
 
     done
+}
+
+###############################################################################
+# Finalize Test
+###############################################################################
+
+finalize_test()
+{
+    #
+    # Default Result
+    #
+    [ -z "$TEST_RESULT" ] && TEST_RESULT="FAIL"
+
+    [ -z "$TEST_MESSAGE" ] && TEST_MESSAGE="-"
+
+    COMMAND_END_TIME=$(get_timestamp)
+
+    #
+    # Validation Result
+    #
+    write_validation_result
+
+    #
+    # Footer
+    #
+    write_test_footer
+
+    #
+    # PASS / FAIL
+    #
+    if [ "$TEST_RESULT" = "PASS" ]
+    then
+        log_pass "$TEST_ID"
+    else
+        log_fail "$TEST_ID"
+    fi
+
+    #
+    # CSV
+    #
+    csv_write "$TEST_RESULT"
+
+    #
+    # Reset Variables
+    #
+    TEST_RESULT=""
+    TEST_MESSAGE=""
 }
