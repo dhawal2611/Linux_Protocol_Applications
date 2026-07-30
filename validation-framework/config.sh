@@ -99,7 +99,6 @@ LOG_FILE_ENABLE=0
 ###############################################################################
 LOGGER_OUTPUT_MODE="console"
 
-
 ###############################################################################
 # Test Log Configuration
 #
@@ -124,6 +123,101 @@ LOGGER_OUTPUT_MODE="console"
 #   console
 ###############################################################################
 TEST_LOG_OUTPUT_MODE="console"
+
+###############################################################################
+# Thermal Configuration
+###############################################################################
+
+THERMAL_STRESS_DURATION=5
+THERMAL_STRESS_CPU=1
+
+###############################################################################
+# DDR Test Configuration
+###############################################################################
+
+DDR_TEST_SIZE="64M"
+DDR_TEST_ITERATION=1
+
+###############################################################################
+# DDR Stress-ng Configuration
+###############################################################################
+
+DDR_STRESS_VM=4
+DDR_STRESS_VM_BYTES="512M"
+DDR_STRESS_TIMEOUT=300
+
+###############################################################################
+# DDR Performance Test Configuration
+###############################################################################
+
+DDR_MBW_SIZE=256
+
+###############################################################################
+# Storage Test Configuration
+###############################################################################
+
+STORAGE_TEST_DIR="$(storage_get_mountpoint)/storage_validation"
+
+STORAGE_TEST_FILE="storage_test.bin"
+
+STORAGE_TEST_SIZE="100M"
+
+STORAGE_FIO_SIZE="256M"
+
+STORAGE_FIO_RUNTIME=60
+
+###############################################################################
+# Storage Performance Configuration
+###############################################################################
+
+STORAGE_DD_COUNT=100
+
+STORAGE_FIO_SIZE="256M"
+
+STORAGE_FIO_RUNTIME=60
+
+###############################################################################
+# Storage Devices
+###############################################################################
+
+EMMC_DEVICE="/dev/mmcblk1"
+
+SDCARD_DEVICE="/dev/mmcblk0"
+
+NVME_DEVICE="/dev/nvme0n1"
+
+SATA_DEVICE="/dev/sda"
+
+USB_DEVICE="/dev/sdb"
+
+LOCAL_DEVICE="/home/dhawal/learning/Linux_Protocol_Applications/validation-framework/test"
+LOCALA_DEVICE="/home/dhawal/learning/Linux_Protocol_Applications/validation-framework/test"
+
+###############################################################################
+# Storage Device Selection
+###############################################################################
+
+STORAGE_DEVICE=""
+STORAGE_DEVICES=()
+STORAGE_MOUNTPOINT=""
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 ###############################################################################
 # GPIO Configuration

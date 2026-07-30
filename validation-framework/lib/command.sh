@@ -228,7 +228,7 @@ run_command()
     #
     # Test Footer
     #
-    write_test_footer
+    #write_test_footer
 
     #
     # Return Command Status
@@ -314,6 +314,39 @@ End Time        : $COMMAND_END_TIME
 
     return 1
 }
+
+###############################################################################
+# Test Skip
+###############################################################################
+
+test_skip()
+{
+    TEST_RESULT="SKIPPED"
+    log_skip "$TEST_ID"
+
+    write_test_log "
+--------------------------------------------------------------------------------
+Test Summary
+--------------------------------------------------------------------------------
+
+Result          : SKIPPED
+Reason          : ${TEST_MESSAGE}
+Exit Status     : -
+Execution Time  : ${COMMAND_EXEC_TIME} sec
+End Time        : ${COMMAND_END_TIME}
+
+################################################################################
+# TEST END : ${TEST_ID}
+################################################################################
+"
+
+    log_warn "${TEST_ID}"
+
+    csv_write "SKIPPED"
+
+    return 0
+}
+
 
 ###############################################################################
 # Manual Test

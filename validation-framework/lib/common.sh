@@ -287,3 +287,41 @@ run_registered_tests()
 
     banner "${MODULE_NAME} Validation Completed"
 }
+
+###############################################################################
+# Get Storage device name
+###############################################################################
+
+storage_get_device_name()
+{
+    case "$STORAGE_DEVICE" in
+
+        "$EMMC_DEVICE")
+            echo "eMMC"
+            ;;
+
+        "$SDCARD_DEVICE")
+            echo "SD Card"
+            ;;
+
+        "$NVME_DEVICE")
+            echo "NVMe SSD"
+            ;;
+
+        "$SATA_DEVICE")
+            echo "SATA"
+            ;;
+
+        "$USB_DEVICE")
+            echo "USB Storage"
+            ;;
+        "$LOCAL_DEVICE")
+            echo "Local Storage"
+            ;;
+
+        *)
+            echo "Unknown"
+            ;;
+
+    esac
+}

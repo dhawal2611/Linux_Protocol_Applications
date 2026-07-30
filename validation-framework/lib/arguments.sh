@@ -23,6 +23,14 @@ SUITE_LIST=()
 #
 SUITE_SELECTED=0
 
+#
+# Storage device list
+#
+STORAGE_DEVICE_LIST=(
+    "/dev/mmcblk0"
+    "/dev/nvme0n1"
+)
+
 ###############################################################################
 # Discover Available Modules and Suites
 ###############################################################################
@@ -502,9 +510,30 @@ parse_arguments()
             ###################################################################
             # Version
             ###################################################################
+
 	    --version)
 	        echo "Embedded Linux Validation Framework v1.0.0"
 	        exit 0
+	        ;;
+	    
+	    ###################################################################
+            # Storage device
+            ###################################################################
+	    
+	    --device)
+	        shift
+
+	        if [ -z "$1" ]; then
+	            log_error "Missing value for --device"
+		    exit 1
+	        fi
+
+	        STORAGE_DEVICES+=("$1")
+	        log_error $STORAGE_DEVICES
+	        log_error $STORAGE_DEVICE
+	        
+
+	        continue
 	        ;;
 
             ###################################################################

@@ -66,18 +66,6 @@ REQUIRED_COMMANDS=(
 )
 
 ###############################################################################
-# Required Directories
-###############################################################################
-
-REQUIRED_DIRECTORIES=(
-    "$LIB_DIR"
-    "$MODULE_DIR"
-    "$SUITE_DIR"
-    "$LOG_DIR"
-    "$CSV_DIR"
-)
-
-###############################################################################
 # Required Library Files
 ###############################################################################
 
@@ -180,6 +168,15 @@ check_required_directories()
 {
     local DIR
 
+    local REQUIRED_DIRECTORIES=(
+        "$LIB_DIR"
+        "$MODULE_DIR"
+        "$SUITE_DIR"
+        "$LOG_DIR"
+        "$CSV_DIR"
+    )
+
+
     for DIR in "${REQUIRED_DIRECTORIES[@]}"
     do
 
@@ -196,8 +193,7 @@ check_required_directories()
 
         fi
 
-        framework_pass \
-            "Directory : $(basename "$DIR")"
+        framework_pass "Directory : $(basename "$DIR")"
 
     done
 }

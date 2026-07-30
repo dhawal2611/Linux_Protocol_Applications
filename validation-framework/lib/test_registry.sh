@@ -79,6 +79,7 @@ SUPPORTED_CATEGORIES=(
     power
     system
     diagnostic
+    hardware
 )
 
 SUPPORTED_ENABLED_VALUES=(
