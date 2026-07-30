@@ -66,6 +66,18 @@ REQUIRED_COMMANDS=(
 )
 
 ###############################################################################
+# Required Directories
+###############################################################################
+
+REQUIRED_DIRECTORIES=(
+    "$LIB_DIR"
+    "$MODULE_DIR"
+    "$SUITE_DIR"
+    "$LOG_DIR"
+    "$CSV_DIR"
+)
+
+###############################################################################
 # Required Library Files
 ###############################################################################
 
@@ -168,45 +180,26 @@ check_required_directories()
 {
     local DIR
 
-    local REQUIRED_DIRECTORIES=(
-        "$LIB_DIR"
-        "$MODULE_DIR"
-        "$SUITE_DIR"
-        "$LOG_DIR"
-        "$CSV_DIR"
-    )
-
-    framework_info "LIB_DIR     : $LIB_DIR"
-    framework_info "MODULE_DIR  : $MODULE_DIR"
-    framework_info "SUITE_DIR   : $SUITE_DIR"
-    framework_info "LOG_DIR     : $LOG_DIR"
-    framework_info "CSV_DIR     : $CSV_DIR"
-
     for DIR in "${REQUIRED_DIRECTORIES[@]}"
     do
-        #
-        # Skip Empty Directory
-        #
-        if [ -z "$DIR" ]
-        then
-            framework_fatal "Directory variable is empty."
-            return 1
-        fi
 
         if [ ! -d "$DIR" ]
         then
-            if ! mkdir -p "$DIR"
+
+            mkdir -p "$DIR"
+
+            if [ $? -ne 0 ]
             then
-                framework_fatal "Create Directory : $DIR"
-                return 1
+                framework_fatal \
+                    "Create Directory : $DIR"
             fi
+
         fi
 
-        framework_pass "Directory : ${DIR}"
+        framework_pass \
+            "Directory : $(basename "$DIR")"
 
     done
-
-    return 0
 }
 
 ###############################################################################

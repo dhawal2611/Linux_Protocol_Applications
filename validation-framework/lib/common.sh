@@ -79,8 +79,8 @@ check_root()
 {
     if [ "$(id -u)" -ne 0 ]
     then
-        log_warning "Framework is not running as root."
-        log_warning "Some validation modules may fail."
+        log_warn "Framework is not running as root."
+        log_warn "Some validation modules may fail."
     fi
 }
 

@@ -250,7 +250,7 @@ test_pass()
     #
     # Console/File PASS message
     #
-    #log_pass "$TEST_ID"
+    log_pass "$TEST_ID"
 
     #
     # Test Summary
@@ -287,7 +287,7 @@ test_fail()
     #
     # Console/File FAIL message
     #
-    #log_fail "$TEST_ID"
+    log_fail "$TEST_ID"
 
     #
     # Test Summary

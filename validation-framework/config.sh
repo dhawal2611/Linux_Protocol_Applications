@@ -29,6 +29,14 @@ FRAMEWORK_VERSION="1.0.0"
 
 LOG_DIR="./logs"
 
+# Framework Directory Structure Configuration
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+LIB_DIR="$ROOT_DIR/lib"
+MODULE_DIR="$ROOT_DIR/modules"
+SUITE_DIR="$ROOT_DIR/suites"
+LOG_DIR="$ROOT_DIR/logs"
+CSV_DIR="$ROOT_DIR/csv"
+
 mkdir -p "$LOG_DIR"
 
 #LOG_FILE="$LOG_DIR/validation_$(date +%Y%m%d_%H%M%S).log"
