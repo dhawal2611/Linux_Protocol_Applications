@@ -519,20 +519,19 @@ parse_arguments()
 	    ###################################################################
             # Storage device
             ###################################################################
-	    
+
+
 	    --device)
 	        shift
 
 	        if [ -z "$1" ]; then
-	            log_error "Missing value for --device"
+		    log_error "Missing value for --device"
 		    exit 1
 	        fi
 
 	        STORAGE_DEVICES+=("$1")
-	        log_error $STORAGE_DEVICES
-	        log_error $STORAGE_DEVICE
-	        
 
+	        shift
 	        continue
 	        ;;
 

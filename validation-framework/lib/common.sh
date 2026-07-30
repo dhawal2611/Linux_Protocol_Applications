@@ -10,7 +10,7 @@ initialize_framework()
     # Create Directories
     #
     mkdir -p "$LOG_DIR"
-    mkdir -p "$CSV_DIR"
+    #mkdir -p "$CSV_DIR"
 
     #
     # Create Log Files
@@ -294,34 +294,5 @@ run_registered_tests()
 
 storage_get_device_name()
 {
-    case "$STORAGE_DEVICE" in
-
-        "$EMMC_DEVICE")
-            echo "eMMC"
-            ;;
-
-        "$SDCARD_DEVICE")
-            echo "SD Card"
-            ;;
-
-        "$NVME_DEVICE")
-            echo "NVMe SSD"
-            ;;
-
-        "$SATA_DEVICE")
-            echo "SATA"
-            ;;
-
-        "$USB_DEVICE")
-            echo "USB Storage"
-            ;;
-        "$LOCAL_DEVICE")
-            echo "Local Storage"
-            ;;
-
-        *)
-            echo "Unknown"
-            ;;
-
-    esac
+    echo "$STORAGE_NAME"
 }

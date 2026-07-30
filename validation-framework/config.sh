@@ -37,7 +37,7 @@ SUITE_DIR="$ROOT_DIR/suites"
 LOG_DIR="$ROOT_DIR/logs"
 CSV_DIR="$ROOT_DIR/csv"
 
-mkdir -p "$LOG_DIR"
+#mkdir -p "$LOG_DIR"
 
 #LOG_FILE="$LOG_DIR/validation_$(date +%Y%m%d_%H%M%S).log"
 
@@ -153,10 +153,10 @@ DDR_STRESS_TIMEOUT=300
 DDR_MBW_SIZE=256
 
 ###############################################################################
-# Storage Test Configuration
+# Storage Test and Performance Configuration
 ###############################################################################
 
-STORAGE_TEST_DIR="$(storage_get_mountpoint)/storage_validation"
+STORAGE_TEST_DIR="storage_validation"
 
 STORAGE_TEST_FILE="storage_test.bin"
 
@@ -166,32 +166,19 @@ STORAGE_FIO_SIZE="256M"
 
 STORAGE_FIO_RUNTIME=60
 
-###############################################################################
-# Storage Performance Configuration
-###############################################################################
-
 STORAGE_DD_COUNT=100
-
-STORAGE_FIO_SIZE="256M"
-
-STORAGE_FIO_RUNTIME=60
 
 ###############################################################################
 # Storage Devices
 ###############################################################################
 
 EMMC_DEVICE="/dev/mmcblk1"
-
 SDCARD_DEVICE="/dev/mmcblk0"
-
 NVME_DEVICE="/dev/nvme0n1"
-
 SATA_DEVICE="/dev/sda"
-
 USB_DEVICE="/dev/sdb"
 
-LOCAL_DEVICE="/home/dhawal/learning/Linux_Protocol_Applications/validation-framework/test"
-LOCALA_DEVICE="/home/dhawal/learning/Linux_Protocol_Applications/validation-framework/test"
+LOCAL_DEVICE="/home/dhawal/Linux_Protocol_Applications/validation-framework/test"
 
 ###############################################################################
 # Storage Device Selection

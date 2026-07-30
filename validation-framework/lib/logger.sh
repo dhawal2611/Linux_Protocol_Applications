@@ -107,7 +107,7 @@ log_skip()
 {
     SKIP_COUNT=$((SKIP_COUNT + 1))
 
-    write_logger "$YELLOW" "[FAIL]" "$1"
+    write_logger "$YELLOW" "[SKIP]" "$1"
 }
 
 ###############################################################################
@@ -195,7 +195,8 @@ Validation Summary
 ===============================================================================
 
 PASS            : $PASS_COUNT
-FAIL            : $FAIL_COUNT"
+FAIL            : $FAIL_COUNT
+SKIP            : $SKIP_COUNT"
 
     if [ "$LOG_FILE_ENABLE" -eq 1 ]
     then

@@ -269,6 +269,7 @@ storage_002()
 
 storage_003()
 {
+    TEST_ID="STORAGE-003"
     local DEVICE SIZE TYPE MODEL
 
     log_info "[STORAGE-003] Verify Block Device Information"
@@ -374,6 +375,7 @@ storage_005()
 
 storage_006()
 {
+    TEST_ID="STORAGE-006"
     local DEVICE
     local SIZE
 
@@ -701,6 +703,7 @@ storage_015()
 
 storage_016()
 {
+    TEST_ID="STORAGE-016"
     log_info "[STORAGE-016] Verify FIO Availability"
 
     if ! command -v fio >/dev/null 2>&1
@@ -720,6 +723,7 @@ storage_016()
 
 storage_017()
 {
+    TEST_ID="STORAGE-017"
     log_info "[STORAGE-017] Run FIO Storage Stress Test"
 
     if ! command -v fio >/dev/null 2>&1
@@ -762,6 +766,7 @@ storage_017()
 
 storage_018()
 {
+    TEST_ID="STORAGE-018"
     local FILESYSTEM
     local DEVICE
 
@@ -880,6 +885,7 @@ storage_019()
 
 storage_020()
 {
+    TEST_ID="STORAGE-020"
     log_info "[STORAGE-020] Cleanup Storage Test Files"
 
     storage_remove_test_directory
@@ -1190,75 +1196,91 @@ storage_init()
     log_info "========================================="
     log_info "Starting Storage Validation"
     log_info "========================================="
-    
+
     if [ -z "$STORAGE_DEVICE" ]
     then
-        TEST_MESSAGE="No storage device selected."
-
-        log_error "Please specify storage device."
-
-        log_error "Example:"
-
-        log_error "./validate.sh storage --device mmcblk0"
-
-        log_error "./validate.sh storage --device nvme0n1"
-
+        log_error "No storage device selected."
         return 1
     fi
-    
-     # =======================================================================
- # TRANSLATION LAYER: Map device aliases to configured system paths
- # =======================================================================
- case "$STORAGE_DEVICE" in
-   "emmc")
-     STORAGE_DEVICE="$EMMC_DEVICE"
-     ;;
-   "sdcard")
-     STORAGE_DEVICE="$SDCARD_DEVICE"
-     ;;
-   "nvme")
-     STORAGE_DEVICE="$NVME_DEVICE"
-     ;;
-   "sata")
-     STORAGE_DEVICE="$SATA_DEVICE"
-     ;;
-   "usb")
-     STORAGE_DEVICE="$USB_DEVICE"
-     ;;
-   "local"|"locala")
-     STORAGE_DEVICE="$LOCAL_DEVICE"
-     ;;
- esac
- # =======================================================================
-    
-    log_info $STORAGE_DEVICE
-    #if [ ! -b "/dev/$STORAGE_DEVICE" ] && [ ! -b "$STORAGE_DEVICE" ]
-    #then
-    #    log_error "Storage device ${STORAGE_DEVICE} does not exist."
-    #    return 1
-    #fi
-    
-    if [ ! -b "$STORAGE_DEVICE" ]
+
+    ###########################################################################
+    # Translate logical storage name to actual device
+    ###########################################################################
+    case "${STORAGE_DEVICE,,}" in
+
+	    emmc)
+		STORAGE_DEVICE="$EMMC_DEVICE"
+		STORAGE_NAME="eMMC"
+		;;
+
+	    sdcard)
+		STORAGE_DEVICE="$SDCARD_DEVICE"
+		STORAGE_NAME="SD Card"
+		;;
+
+	    nvme)
+		STORAGE_DEVICE="$NVME_DEVICE"
+		STORAGE_NAME="NVMe SSD"
+		;;
+
+	    sata)
+		STORAGE_DEVICE="$SATA_DEVICE"
+		STORAGE_NAME="SATA Drive"
+		;;
+
+	    usb)
+		STORAGE_DEVICE="$USB_DEVICE"
+		STORAGE_NAME="USB Storage"
+		;;
+
+	    local)
+		STORAGE_DEVICE="$LOCAL_DEVICE"
+		STORAGE_NAME="Local Storage"
+		;;
+
+	    *)
+		log_error "Unknown storage device : ${STORAGE_DEVICE}"
+		log_error ""
+		log_error "Supported devices:"
+		log_error "  emmc"
+		log_error "  sdcard"
+		log_error "  nvme"
+		log_error "  sata"
+		log_error "  usb"
+		log_error "  local"
+		return 1
+		;;
+    esac
+
+    ###########################################################################
+    # Verify Device
+    ###########################################################################
+    if [ ! -b "$STORAGE_DEVICE" ] && [ ! -d "$STORAGE_DEVICE" ]
     then
-        log_error "Storage device $STORAGE_DEVICE does not exist."
+        log_error "Storage device ${STORAGE_DEVICE} does not exist."
         return 1
     fi
-    
+
+    ###########################################################################
+    # Set Mount Point
+    ###########################################################################
+    STORAGE_MOUNTPOINT="$(storage_get_mountpoint)"
+
+    if [ -z "$STORAGE_MOUNTPOINT" ] && [ -d "$STORAGE_DEVICE" ]
+    then
+        STORAGE_MOUNTPOINT="$STORAGE_DEVICE"
+    fi
+
+    log_info "========================================="
+    log_info "Storage Name       : $STORAGE_NAME"
+    log_info "Storage Device     : $STORAGE_DEVICE"
+    log_info "Storage Mountpoint : $STORAGE_MOUNTPOINT"
+    log_info "========================================="
+
     storage_register_tests
 }
 
-#
-# Register tests when module is sourced
-#
-for STORAGE_DEVICE in "${STORAGE_DEVICES[@]}"
-do
-    log_info "=========================================="
-    log_info "Testing Storage Device : ${STORAGE_DEVICE}"
-    log_info "=========================================="
-
-    storage_init || continue
-
-done
+storage_init
 
 ###############################################################################
 # End Of File
