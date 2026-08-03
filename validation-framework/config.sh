@@ -153,42 +153,46 @@ DDR_STRESS_TIMEOUT=300
 DDR_MBW_SIZE=256
 
 ###############################################################################
-# Storage Test and Performance Configuration
+# eMMC Test Configuration
 ###############################################################################
 
-STORAGE_TEST_DIR="storage_validation"
+EMMC_TEST_SIZE="100M"
 
-STORAGE_TEST_FILE="storage_test.bin"
+###############################################################################
+# eMMC Performance Configuration
+###############################################################################
 
-STORAGE_TEST_SIZE="100M"
+EMMC_DD_COUNT=100
 
-STORAGE_FIO_SIZE="256M"
+EMMC_FIO_SIZE="256M"
 
-STORAGE_FIO_RUNTIME=60
-
-STORAGE_DD_COUNT=100
+EMMC_FIO_RUNTIME=60
 
 ###############################################################################
 # Storage Devices
 ###############################################################################
 
-EMMC_DEVICE="/dev/sdb"
+EMMC_DEVICE="/dev/mmcblk0"
+
 SDCARD_DEVICE="/dev/mmcblk0"
+
 NVME_DEVICE="/dev/nvme0n1"
+
 SATA_DEVICE="/dev/sda"
+
 USB_DEVICE="/dev/sdb"
 
-LOCAL_DEVICE="/home/dhawal/Linux_Protocol_Applications/validation-framework/test"
+LOCAL_DEVICE="/home/dhawal/learning/Linux_Protocol_Applications/validation-framework/test"
 
 ###############################################################################
 # Storage Device Selection
 ###############################################################################
 
 STORAGE_DEVICE=""
+
 STORAGE_DEVICES=()
+
 STORAGE_MOUNTPOINT=""
-
-
 
 
 
