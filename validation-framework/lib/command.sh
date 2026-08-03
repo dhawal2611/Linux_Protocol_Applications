@@ -156,6 +156,10 @@ run_command()
 
     local CMD="$3"
 
+    echo "--------------###############################################################################"
+    echo $TEST_ID $TEST_NAME $CMD
+    echo "--------------###############################################################################"
+
     local START_TIME
     local END_TIME
 
@@ -247,7 +251,6 @@ run_command()
 
 test_pass()
 {
-    echo "[PASS] $TEST_ID"
     #
     # Console/File PASS message
     #
@@ -285,7 +288,6 @@ End Time        : $COMMAND_END_TIME
 
 test_fail()
 {
-    echo "[FAIL] $TEST_ID"
     #
     # Console/File FAIL message
     #
@@ -323,7 +325,6 @@ End Time        : $COMMAND_END_TIME
 
 test_skip()
 {
-    echo "[SKIP] $TEST_ID"
     TEST_RESULT="SKIPPED"
     log_skip "$TEST_ID"
 

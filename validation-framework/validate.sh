@@ -148,27 +148,7 @@ run_modules()
 
     for MODULE in "${MODULE_LIST[@]}"
     do
-
-        #######################################################################
-        # Storage Module
-        #######################################################################
-        if [ "$MODULE" = "storage" ]
-	then
-	    for DEVICE in "${STORAGE_DEVICES[@]}"
-	    do
-		STORAGE_DEVICE="$DEVICE"
-
-		log_info "========================================="
-		log_info "Testing Storage Device : ${DEVICE}"
-		log_info "========================================="
-
-		run_single_module "$MODULE"
-
-	    done
-	else
-	    run_single_module "$MODULE"
-	fi
-
+        run_single_module "$MODULE"
     done
 }
 

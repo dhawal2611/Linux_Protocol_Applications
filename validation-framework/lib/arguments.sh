@@ -515,25 +515,6 @@ parse_arguments()
 	        echo "Embedded Linux Validation Framework v1.0.0"
 	        exit 0
 	        ;;
-	    
-	    ###################################################################
-            # Storage device
-            ###################################################################
-
-
-	    --device)
-	        shift
-
-	        if [ -z "$1" ]; then
-		    log_error "Missing value for --device"
-		    exit 1
-	        fi
-
-	        STORAGE_DEVICES+=("$1")
-
-	        shift
-	        continue
-	        ;;
 
             ###################################################################
             # Unknown Option

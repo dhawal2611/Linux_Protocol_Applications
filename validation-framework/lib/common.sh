@@ -288,11 +288,3 @@ run_registered_tests()
     banner "${MODULE_NAME} Validation Completed"
 }
 
-###############################################################################
-# Get Storage device name
-###############################################################################
-
-storage_get_device_name()
-{
-    echo "$STORAGE_NAME"
-}

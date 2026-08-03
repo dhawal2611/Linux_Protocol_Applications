@@ -398,6 +398,10 @@ register_test()
 
     done
 
+    echo "***************************************************************************************************"
+    echo $ID $FUNCTION $NAME $CATEGORY $TYPE $PRIORITY $TIMEOUT $TAGS $OWNER $BOARD $ENABLED $DESCRIPTION $DEPENDENCY
+    echo "***************************************************************************************************"
+
     #
     # Mandatory Validation
     #
