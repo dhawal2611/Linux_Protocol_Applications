@@ -172,7 +172,7 @@ STORAGE_DD_COUNT=100
 # Storage Devices
 ###############################################################################
 
-EMMC_DEVICE="/home/dhawal/Linux_Protocol_Applications/validation-framework/test"
+EMMC_DEVICE="/dev/sdb"
 SDCARD_DEVICE="/dev/mmcblk0"
 NVME_DEVICE="/dev/nvme0n1"
 SATA_DEVICE="/dev/sda"

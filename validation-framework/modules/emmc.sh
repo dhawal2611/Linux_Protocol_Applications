@@ -1,7 +1,7 @@
 #!/bin/bash
 ###############################################################################
 # File        : emmc.sh
-# Description : eMMC Storage Validation Module
+# Description : eMMC Validation Module
 ###############################################################################
 
 ###############################################################################
@@ -27,39 +27,40 @@ REQUIRED_COMMANDS=(
     sync
     rm
     mkdir
-    touch
     findmnt
-    find
     sed
     tr
     #mmc
 )
 
 ###############################################################################
-# Optional Commands
-###############################################################################
-
-OPTIONAL_COMMANDS=(
-    fio
-    hdparm
-    fsck
-)
-
-###############################################################################
-# Module Variables
-###############################################################################
-
-EMMC_TEST_DIR=""
-EMMC_TEST_FILE="emmc_test.bin"
-
-###############################################################################
 # Helper Functions
 ###############################################################################
 
 #
-# Get configured eMMC device
+# Get eMMC Device Name
 #
-emmc_get_device()
+emmc_get_device_name()
+{
+    lsblk -dn -o NAME "$EMMC_DEVICE"
+}
+
+###############################################################################
+
+#
+# Check eMMC Device Exists
+#
+emmc_device_exists()
+{
+    [ -b "$EMMC_DEVICE" ]
+}
+
+###############################################################################
+
+#
+# Get eMMC Block Device
+#
+emmc_get_block_device()
 {
     echo "$EMMC_DEVICE"
 }
@@ -67,178 +68,86 @@ emmc_get_device()
 ###############################################################################
 
 #
-# Verify eMMC block device exists
-#
-emmc_device_exists()
-{
-    [ -n "$EMMC_DEVICE" ] && [ -b "$EMMC_DEVICE" ]
-}
-
-###############################################################################
-
-#
-# Get eMMC device name
-#
-emmc_get_device_name()
-{
-    local DEVICE
-
-    DEVICE=$(basename "$EMMC_DEVICE")
-
-    echo "$DEVICE"
-}
-
-###############################################################################
-
-#
-# Get eMMC device model
-#
-emmc_get_model()
-{
-    local MODEL
-
-    MODEL=$(lsblk -dn -o MODEL "$EMMC_DEVICE" 2>/dev/null)
-
-    if [ -z "$MODEL" ]
-    then
-        echo "Unknown"
-    else
-        echo "$MODEL"
-    fi
-}
-
-###############################################################################
-
-#
-# Get eMMC device size
+# Get eMMC Device Size
 #
 emmc_get_size()
 {
-    lsblk -dn -o SIZE "$EMMC_DEVICE" 2>/dev/null
+    lsblk -dn -o SIZE "$EMMC_DEVICE"
 }
 
 ###############################################################################
 
 #
-# Get eMMC device type
+# Get eMMC Device Type
 #
 emmc_get_type()
 {
-    lsblk -dn -o TYPE "$EMMC_DEVICE" 2>/dev/null
+    lsblk -dn -o TYPE "$EMMC_DEVICE"
 }
 
 ###############################################################################
 
 #
-# Get eMMC filesystem
+# Get eMMC Device Model
+#
+emmc_get_model()
+{
+    lsblk -dn -o MODEL "$EMMC_DEVICE"
+}
+
+###############################################################################
+
+#
+# Get eMMC Filesystem
 #
 emmc_get_filesystem()
 {
-    local FILESYSTEM
-
-    FILESYSTEM=$(findmnt -rn -S "$EMMC_DEVICE" -o FSTYPE 2>/dev/null | head -n1)
-
-    if [ -z "$FILESYSTEM" ]
-    then
-        FILESYSTEM=$(lsblk -nr -o FSTYPE "$EMMC_DEVICE" 2>/dev/null \
-            | sed '/^$/d' | head -n1)
-    fi
-
-    echo "$FILESYSTEM"
+    findmnt -n -S "$EMMC_DEVICE" -o FSTYPE
 }
 
 ###############################################################################
 
 #
-# Get eMMC mount point
+# Get eMMC Mount Point
 #
 emmc_get_mountpoint()
 {
-    local MOUNTPOINT
-
-    MOUNTPOINT=$(findmnt -rn -S "$EMMC_DEVICE" -o TARGET 2>/dev/null \
-        | head -n1)
-
-    if [ -z "$MOUNTPOINT" ]
-    then
-        MOUNTPOINT=$(lsblk -nr -o MOUNTPOINT "$EMMC_DEVICE" 2>/dev/null \
-            | sed '/^$/d' | head -n1)
-    fi
-
-    echo "$MOUNTPOINT"
+    findmnt -n -S "$EMMC_DEVICE" -o TARGET
 }
 
 ###############################################################################
 
 #
-# Get mounted eMMC partition
-#
-emmc_get_mounted_partition()
-{
-    local PARTITION
-
-    PARTITION=$(findmnt -rn -S "$EMMC_DEVICE" -o SOURCE 2>/dev/null \
-        | head -n1)
-
-    if [ -z "$PARTITION" ]
-    then
-        PARTITION=$(lsblk -nr -o NAME,MOUNTPOINT "$EMMC_DEVICE" 2>/dev/null \
-            | awk '$2 != "" {print "/dev/"$1; exit}')
-    fi
-
-    echo "$PARTITION"
-}
-
-###############################################################################
-
-#
-# Get eMMC block device information
-#
-emmc_get_block_info()
-{
-    lsblk -dn -o NAME,SIZE,TYPE,FSTYPE,MODEL "$EMMC_DEVICE"
-}
-
-###############################################################################
-
-#
-# Check read/write mount status
+# Check eMMC Read/Write Mount
 #
 emmc_is_rw()
 {
-    local MOUNTPOINT
-    local OPTIONS
-
-    MOUNTPOINT=$(emmc_get_mountpoint)
-
-    if [ -z "$MOUNTPOINT" ]
-    then
-        return 1
-    fi
-
-    OPTIONS=$(findmnt -rn -T "$MOUNTPOINT" -o OPTIONS 2>/dev/null)
-
-    echo "$OPTIONS" | tr ',' '\n' | grep -qw "rw"
+    findmnt -n -S "$EMMC_DEVICE" -o OPTIONS | grep -qw rw
 }
 
 ###############################################################################
 
 #
-# Create eMMC test directory
+# Check Directory
+#
+emmc_directory_exists()
+{
+    local DIR="$1"
+
+    [ -d "$DIR" ]
+}
+
+###############################################################################
+
+#
+# Create Test Directory
 #
 emmc_create_test_directory()
 {
-    local MOUNTPOINT
-
-    MOUNTPOINT=$(emmc_get_mountpoint)
-
-    if [ -z "$MOUNTPOINT" ]
+    if [ -z "$EMMC_TEST_DIR" ]
     then
-        log_error "Unable to determine eMMC mount point."
         return 1
     fi
-
-    EMMC_TEST_DIR="${MOUNTPOINT}/emmc_validation"
 
     mkdir -p "$EMMC_TEST_DIR"
 }
@@ -246,52 +155,32 @@ emmc_create_test_directory()
 ###############################################################################
 
 #
-# Cleanup eMMC test files
+# Remove Test Directory
 #
-emmc_cleanup()
+emmc_remove_test_directory()
 {
-    if [ -n "$EMMC_TEST_DIR" ]
+    if [ -z "$EMMC_TEST_DIR" ]
     then
-        rm -rf "$EMMC_TEST_DIR" 2>/dev/null
+        return 0
+    fi
+
+    rm -rf "$EMMC_TEST_DIR"
+}
+
+###############################################################################
+
+#
+# Cleanup Test File
+#
+emmc_cleanup_test_file()
+{
+    local TEST_FILE="$1"
+
+    if [ -n "$TEST_FILE" ]
+    then
+        rm -f "$TEST_FILE" 2>/dev/null
     fi
 }
-
-###############################################################################
-
-#
-# Get test file
-#
-emmc_get_test_file()
-{
-    echo "${EMMC_TEST_DIR}/${EMMC_TEST_FILE}"
-}
-
-###############################################################################
-
-#
-# Verify eMMC is mounted
-#
-emmc_is_mounted()
-{
-    [ -n "$(emmc_get_mountpoint)" ]
-}
-
-###############################################################################
-
-#
-# Verify eMMC filesystem is writable
-#
-emmc_is_writable()
-{
-    local MOUNTPOINT
-
-    MOUNTPOINT=$(emmc_get_mountpoint)
-
-    [ -n "$MOUNTPOINT" ] &&
-        [ -w "$MOUNTPOINT" ]
-}
-
-###############################################################################
 
 ###############################################################################
 # EMMC-001 : Detect eMMC Device
@@ -299,6 +188,8 @@ emmc_is_writable()
 
 emmc_001()
 {
+    local DEVICE_NAME=""
+
     log_info "[EMMC-001] Detect eMMC Device"
 
     run_command \
@@ -313,14 +204,16 @@ emmc_001()
         return
     fi
 
-    if ! emmc_device_exists
+    DEVICE_NAME=$(echo "$COMMAND_OUTPUT" | awk 'NR==1 {print $1}')
+
+    if [ -z "$DEVICE_NAME" ]
     then
-        TEST_MESSAGE="eMMC block device ${EMMC_DEVICE} does not exist."
+        TEST_MESSAGE="eMMC device name could not be determined."
         test_fail
         return
     fi
 
-    TEST_MESSAGE="eMMC device ${EMMC_DEVICE} detected successfully."
+    TEST_MESSAGE="Detected eMMC Device=${DEVICE_NAME}"
     test_pass
 }
 
@@ -330,11 +223,23 @@ emmc_001()
 
 emmc_002()
 {
-    local DEVICE_NAME
+    local DEVICE_NAME=""
 
     log_info "[EMMC-002] Verify eMMC Device"
 
-    DEVICE_NAME=$(emmc_get_device_name)
+    run_command \
+        "EMMC-002" \
+        "Verify eMMC Device" \
+        "lsblk -dn -o NAME \"$EMMC_DEVICE\""
+
+    if [ "$COMMAND_STATUS" -ne 0 ]
+    then
+        TEST_MESSAGE="Unable to verify eMMC device ${EMMC_DEVICE}."
+        test_fail
+        return
+    fi
+
+    DEVICE_NAME=$(echo "$COMMAND_OUTPUT" | tr -d '[:space:]')
 
     if [ -z "$DEVICE_NAME" ]
     then
@@ -353,18 +258,11 @@ emmc_002()
 
 emmc_003()
 {
-    local SIZE
-    local TYPE
-    local MODEL
+    local SIZE=""
+    local TYPE=""
+    local MODEL=""
 
     log_info "[EMMC-003] Verify eMMC Block Device Information"
-
-    if ! emmc_device_exists
-    then
-        TEST_MESSAGE="eMMC device ${EMMC_DEVICE} not found."
-        test_fail
-        return
-    fi
 
     run_command \
         "EMMC-003" \
@@ -394,23 +292,15 @@ emmc_003()
 }
 
 ###############################################################################
-# EMMC-004 : Verify eMMC EXT_CSD
-###############################################################################
-
-###############################################################################
-# EMMC-004 : Verify eMMC EXT_CSD
+# EMMC-004 : Verify EXT_CSD
 ###############################################################################
 
 emmc_004()
 {
-    local DEVICE="$EMMC_DEVICE"
-    local EXT_CSD_OUTPUT
-
     log_info "[EMMC-004] Verify eMMC EXT_CSD"
-
-    ###########################################################################
-    # Verify mmc utility
-    ###########################################################################
+    TEST_ID="EMMC-004"
+    #TEST_NAME="Verify eMMC EXT_CSD"
+    #LAST_COMMAND="mmc extcsd read \"$EMMC_DEVICE\""
 
     if ! command -v mmc >/dev/null 2>&1
     then
@@ -419,64 +309,26 @@ emmc_004()
         return
     fi
 
-    ###########################################################################
-    # Verify eMMC device
-    ###########################################################################
-
-    if [ -z "$DEVICE" ]
-    then
-        TEST_MESSAGE="eMMC device is not configured."
-        test_fail
-        return
-    fi
-
-    if [ ! -b "$DEVICE" ]
-    then
-        TEST_MESSAGE="eMMC device ${DEVICE} does not exist."
-        test_fail
-        return
-    fi
-
-    ###########################################################################
-    # Read EXT_CSD
-    ###########################################################################
-
     run_command \
         "EMMC-004" \
         "Verify eMMC EXT_CSD" \
-        "mmc extcsd read ${DEVICE}"
+        "mmc extcsd read \"$EMMC_DEVICE\""
 
     if [ "$COMMAND_STATUS" -ne 0 ]
     then
-        TEST_MESSAGE="Failed to read EXT_CSD from ${DEVICE}."
+        TEST_MESSAGE="Unable to read eMMC EXT_CSD."
         test_fail
         return
     fi
-
-    ###########################################################################
-    # Validate EXT_CSD output
-    ###########################################################################
 
     if [ -z "$COMMAND_OUTPUT" ]
     then
-        TEST_MESSAGE="EXT_CSD output is empty."
+        TEST_MESSAGE="eMMC EXT_CSD output is empty."
         test_fail
         return
     fi
 
-    ###########################################################################
-    # Verify important EXT_CSD fields
-    ###########################################################################
-
-    if ! echo "$COMMAND_OUTPUT" | grep -q "EXT_CSD"
-    then
-        TEST_MESSAGE="Invalid EXT_CSD output."
-        test_fail
-        return
-    fi
-
-    TEST_MESSAGE="eMMC EXT_CSD read successfully from ${DEVICE}."
-
+    TEST_MESSAGE="eMMC EXT_CSD information read successfully."
     test_pass
 }
 
@@ -486,15 +338,27 @@ emmc_004()
 
 emmc_005()
 {
-    local FILESYSTEM
+    local FILESYSTEM=""
 
     log_info "[EMMC-005] Verify Filesystem Type"
 
-    FILESYSTEM=$(emmc_get_filesystem)
+    run_command \
+        "EMMC-005" \
+        "Verify Filesystem Type" \
+        "blkid -o value -s TYPE \"$EMMC_DEVICE\""
+
+    if [ "$COMMAND_STATUS" -ne 0 ]
+    then
+        TEST_MESSAGE="Unable to determine eMMC filesystem."
+        test_fail
+        return
+    fi
+
+    FILESYSTEM=$(echo "$COMMAND_OUTPUT" | tr -d '[:space:]')
 
     if [ -z "$FILESYSTEM" ]
     then
-        TEST_MESSAGE="No filesystem detected on eMMC device."
+        TEST_MESSAGE="eMMC filesystem type is not available."
         test_fail
         return
     fi
@@ -509,22 +373,32 @@ emmc_005()
 
 emmc_006()
 {
-    local PARTITION
-    local MOUNTPOINT
+    local MOUNTPOINT=""
 
     log_info "[EMMC-006] Verify Mounted Partition"
 
-    PARTITION=$(emmc_get_mounted_partition)
-    MOUNTPOINT=$(emmc_get_mountpoint)
+    run_command \
+        "EMMC-006" \
+        "Verify Mounted Partition" \
+        "findmnt -n -S \"$EMMC_DEVICE\" -o TARGET"
 
-    if [ -z "$PARTITION" ] || [ -z "$MOUNTPOINT" ]
+    if [ "$COMMAND_STATUS" -ne 0 ]
     then
-        TEST_MESSAGE="No mounted eMMC partition detected."
+        TEST_MESSAGE="Unable to determine eMMC mount point."
         test_fail
         return
     fi
 
-    TEST_MESSAGE="Partition=${PARTITION}, MountPoint=${MOUNTPOINT}"
+    MOUNTPOINT=$(echo "$COMMAND_OUTPUT" | tr -d '[:space:]')
+
+    if [ -z "$MOUNTPOINT" ]
+    then
+        TEST_MESSAGE="eMMC device is not mounted."
+        test_fail
+        return
+    fi
+
+    TEST_MESSAGE="eMMC Mount Point=${MOUNTPOINT}"
     test_pass
 }
 
@@ -534,15 +408,27 @@ emmc_006()
 
 emmc_007()
 {
-    local SIZE
+    local SIZE=""
 
     log_info "[EMMC-007] Verify Disk Capacity"
 
-    SIZE=$(emmc_get_size)
+    run_command \
+        "EMMC-007" \
+        "Verify Disk Capacity" \
+        "lsblk -dn -o SIZE \"$EMMC_DEVICE\""
+
+    if [ "$COMMAND_STATUS" -ne 0 ]
+    then
+        TEST_MESSAGE="Unable to determine eMMC capacity."
+        test_fail
+        return
+    fi
+
+    SIZE=$(echo "$COMMAND_OUTPUT" | tr -d '[:space:]')
 
     if [ -z "$SIZE" ]
     then
-        TEST_MESSAGE="Unable to determine eMMC disk capacity."
+        TEST_MESSAGE="eMMC capacity is empty."
         test_fail
         return
     fi
@@ -557,10 +443,10 @@ emmc_007()
 
 emmc_008()
 {
-    local MOUNTPOINT
-    local USED
-    local AVAILABLE
-    local UTILIZATION
+    local MOUNTPOINT=""
+    local USED=""
+    local AVAILABLE=""
+    local UTILIZATION=""
 
     log_info "[EMMC-008] Verify Disk Usage"
 
@@ -568,7 +454,7 @@ emmc_008()
 
     if [ -z "$MOUNTPOINT" ]
     then
-        TEST_MESSAGE="eMMC mount point not found."
+        TEST_MESSAGE="Unable to determine eMMC mount point."
         test_fail
         return
     fi
@@ -589,38 +475,36 @@ emmc_008()
     AVAILABLE=$(echo "$COMMAND_OUTPUT" | awk 'NR==2 {print $4}')
     UTILIZATION=$(echo "$COMMAND_OUTPUT" | awk 'NR==2 {print $5}')
 
-    if [ -z "$USED" ] || [ -z "$AVAILABLE" ]
-    then
-        TEST_MESSAGE="Unable to parse eMMC disk usage."
-        test_fail
-        return
-    fi
-
     TEST_MESSAGE="Used=${USED}, Available=${AVAILABLE}, Usage=${UTILIZATION}"
     test_pass
 }
 
 ###############################################################################
-# EMMC-009 : Verify Read/Write Mount Status
+# EMMC-009 : Verify Read/Write Mount
 ###############################################################################
 
 emmc_009()
 {
-    log_info "[EMMC-009] Verify Read/Write Mount Status"
+    log_info "[EMMC-009] Verify Read Write Mount"
 
-    if ! emmc_is_mounted
+    run_command \
+        "EMMC-009" \
+        "Verify Read Write Mount" \
+        "findmnt -n -S \"$EMMC_DEVICE\" -o OPTIONS"
+
+    if [ "$COMMAND_STATUS" -ne 0 ]
     then
-        TEST_MESSAGE="eMMC filesystem is not mounted."
+        TEST_MESSAGE="Unable to determine eMMC mount options."
         test_fail
         return
     fi
 
     if emmc_is_rw
     then
-        TEST_MESSAGE="eMMC filesystem is mounted Read-Write."
+        TEST_MESSAGE="eMMC filesystem mounted as Read-Write."
         test_pass
     else
-        TEST_MESSAGE="eMMC filesystem is mounted Read-Only."
+        TEST_MESSAGE="eMMC filesystem is Read-Only."
         test_fail
     fi
 }
@@ -631,7 +515,7 @@ emmc_009()
 
 emmc_010()
 {
-    local TEST_FILE
+    local TEST_FILE=""
 
     log_info "[EMMC-010] Verify File Creation"
 
@@ -642,7 +526,7 @@ emmc_010()
         return
     fi
 
-    TEST_FILE=$(emmc_get_test_file)
+    TEST_FILE="${EMMC_TEST_DIR}/${EMMC_TEST_FILE}"
 
     run_command \
         "EMMC-010" \
@@ -651,7 +535,7 @@ emmc_010()
 
     if [ "$COMMAND_STATUS" -ne 0 ]
     then
-        TEST_MESSAGE="Failed to create test file."
+        TEST_MESSAGE="Failed to create eMMC test file."
         test_fail
         return
     fi
@@ -661,7 +545,7 @@ emmc_010()
         TEST_MESSAGE="File created successfully on eMMC."
         test_pass
     else
-        TEST_MESSAGE="Test file was not created."
+        TEST_MESSAGE="eMMC test file not found after creation."
         test_fail
     fi
 }
@@ -672,21 +556,18 @@ emmc_010()
 
 emmc_011()
 {
-    local TEST_FILE
+    local TEST_FILE=""
 
     log_info "[EMMC-011] Verify File Write"
 
-    if [ -z "$EMMC_TEST_DIR" ]
+    if ! emmc_create_test_directory
     then
-        if ! emmc_create_test_directory
-        then
-            TEST_MESSAGE="Unable to create eMMC test directory."
-            test_fail
-            return
-        fi
+        TEST_MESSAGE="Unable to create eMMC test directory."
+        test_fail
+        return
     fi
 
-    TEST_FILE=$(emmc_get_test_file)
+    TEST_FILE="${EMMC_TEST_DIR}/${EMMC_TEST_FILE}"
 
     run_command \
         "EMMC-011" \
@@ -695,17 +576,17 @@ emmc_011()
 
     if [ "$COMMAND_STATUS" -ne 0 ]
     then
-        TEST_MESSAGE="Failed to write test file."
+        TEST_MESSAGE="Failed to write eMMC test file."
         test_fail
         return
     fi
 
     if grep -q "eMMC Storage Validation Framework" "$TEST_FILE"
     then
-        TEST_MESSAGE="File write verified successfully."
+        TEST_MESSAGE="eMMC file write verified successfully."
         test_pass
     else
-        TEST_MESSAGE="File content verification failed."
+        TEST_MESSAGE="eMMC file content verification failed."
         test_fail
     fi
 }
@@ -716,11 +597,11 @@ emmc_011()
 
 emmc_012()
 {
-    local TEST_FILE
+    local TEST_FILE=""
 
     log_info "[EMMC-012] Verify File Read"
 
-    TEST_FILE=$(emmc_get_test_file)
+    TEST_FILE="${EMMC_TEST_DIR}/${EMMC_TEST_FILE}"
 
     if [ ! -f "$TEST_FILE" ]
     then
@@ -743,10 +624,10 @@ emmc_012()
 
     if echo "$COMMAND_OUTPUT" | grep -q "eMMC Storage Validation Framework"
     then
-        TEST_MESSAGE="File read verified successfully."
+        TEST_MESSAGE="eMMC file read verified successfully."
         test_pass
     else
-        TEST_MESSAGE="Unexpected file content."
+        TEST_MESSAGE="Unexpected eMMC file content."
         test_fail
     fi
 }
@@ -757,18 +638,11 @@ emmc_012()
 
 emmc_013()
 {
-    local TEST_FILE
+    local TEST_FILE=""
 
     log_info "[EMMC-013] Verify File Deletion"
 
-    TEST_FILE=$(emmc_get_test_file)
-
-    if [ ! -f "$TEST_FILE" ]
-    then
-        TEST_MESSAGE="eMMC test file does not exist."
-        test_fail
-        return
-    fi
+    TEST_FILE="${EMMC_TEST_DIR}/${EMMC_TEST_FILE}"
 
     run_command \
         "EMMC-013" \
@@ -784,10 +658,10 @@ emmc_013()
 
     if [ ! -f "$TEST_FILE" ]
     then
-        TEST_MESSAGE="File deleted successfully."
+        TEST_MESSAGE="eMMC test file deleted successfully."
         test_pass
     else
-        TEST_MESSAGE="File still exists after deletion."
+        TEST_MESSAGE="eMMC test file still exists."
         test_fail
     fi
 }
@@ -821,38 +695,32 @@ emmc_014()
 
 emmc_015()
 {
-    local TEST_FILE
-    local COUNT
+    local TEST_FILE=""
 
     log_info "[EMMC-015] Verify Sequential Write Performance"
 
-    if [ -z "$EMMC_TEST_DIR" ]
+    if ! emmc_create_test_directory
     then
-        if ! emmc_create_test_directory
-        then
-            TEST_MESSAGE="Unable to create eMMC test directory."
-            test_fail
-            return
-        fi
-    fi
-
-    TEST_FILE=$(emmc_get_test_file)
-
-    COUNT="${STORAGE_DD_COUNT:-100}"
-
-    run_command \
-        "EMMC-015" \
-        "Verify Sequential Write Performance" \
-        "dd if=/dev/zero of=\"$TEST_FILE\" bs=1M count=$COUNT conv=fsync status=progress"
-
-    if [ "$COMMAND_STATUS" -ne 0 ]
-    then
-        TEST_MESSAGE="Sequential eMMC write test failed."
+        TEST_MESSAGE="Unable to create eMMC test directory."
         test_fail
         return
     fi
 
-    TEST_MESSAGE="Sequential write completed successfully (${COUNT} MiB)."
+    TEST_FILE="${EMMC_TEST_DIR}/${EMMC_TEST_FILE}"
+
+    run_command \
+        "EMMC-015" \
+        "Verify Sequential Write Performance" \
+        "dd if=/dev/zero of=\"$TEST_FILE\" bs=1M count=${EMMC_DD_COUNT} conv=fsync status=progress"
+
+    if [ "$COMMAND_STATUS" -ne 0 ]
+    then
+        TEST_MESSAGE="eMMC sequential write test failed."
+        test_fail
+        return
+    fi
+
+    TEST_MESSAGE="eMMC sequential write completed successfully."
     test_pass
 }
 
@@ -862,15 +730,15 @@ emmc_015()
 
 emmc_016()
 {
-    local TEST_FILE
+    local TEST_FILE=""
 
     log_info "[EMMC-016] Verify Sequential Read Performance"
 
-    TEST_FILE=$(emmc_get_test_file)
+    TEST_FILE="${EMMC_TEST_DIR}/${EMMC_TEST_FILE}"
 
     if [ ! -f "$TEST_FILE" ]
     then
-        TEST_MESSAGE="Sequential read test file not found."
+        TEST_MESSAGE="eMMC performance test file not found."
         test_fail
         return
     fi
@@ -882,12 +750,12 @@ emmc_016()
 
     if [ "$COMMAND_STATUS" -ne 0 ]
     then
-        TEST_MESSAGE="Sequential eMMC read test failed."
+        TEST_MESSAGE="eMMC sequential read test failed."
         test_fail
         return
     fi
 
-    TEST_MESSAGE="Sequential read completed successfully."
+    TEST_MESSAGE="eMMC sequential read completed successfully."
     test_pass
 }
 
@@ -897,9 +765,6 @@ emmc_016()
 
 emmc_017()
 {
-    local FIO_SIZE
-    local FIO_RUNTIME
-
     log_info "[EMMC-017] Run FIO Storage Stress Test"
 
     if ! command -v fio >/dev/null 2>&1
@@ -909,23 +774,25 @@ emmc_017()
         return
     fi
 
-    if [ -z "$EMMC_TEST_DIR" ]
+    if ! emmc_create_test_directory
     then
-        if ! emmc_create_test_directory
-        then
-            TEST_MESSAGE="Unable to create eMMC FIO test directory."
-            test_fail
-            return
-        fi
+        TEST_MESSAGE="Unable to create eMMC test directory."
+        test_fail
+        return
     fi
-
-    FIO_SIZE="${STORAGE_FIO_SIZE:-256M}"
-    FIO_RUNTIME="${STORAGE_FIO_RUNTIME:-60}"
 
     run_command \
         "EMMC-017" \
         "Run FIO Storage Stress Test" \
-        "fio --name=emmc_validation --directory=\"$EMMC_TEST_DIR\" --size=\"$FIO_SIZE\" --rw=randrw --bs=4k --runtime=\"$FIO_RUNTIME\" --time_based --group_reporting"
+        "fio \
+        --name=emmc_validation \
+        --directory=\"$EMMC_TEST_DIR\" \
+        --size=\"$EMMC_FIO_SIZE\" \
+        --rw=randrw \
+        --bs=4k \
+        --runtime=\"$EMMC_FIO_RUNTIME\" \
+        --time_based \
+        --group_reporting"
 
     if [ "$COMMAND_STATUS" -eq 0 ]
     then
@@ -943,24 +810,27 @@ emmc_017()
 
 emmc_018()
 {
-    local FILESYSTEM
-    local PARTITION
+    local FILESYSTEM=""
 
     log_info "[EMMC-018] Verify Filesystem Health"
 
-    FILESYSTEM=$(emmc_get_filesystem)
-    PARTITION=$(emmc_get_mounted_partition)
+    run_command \
+        "EMMC-018" \
+        "Verify Filesystem Health" \
+        "blkid -o value -s TYPE \"$EMMC_DEVICE\""
 
-    if [ -z "$FILESYSTEM" ]
+    if [ "$COMMAND_STATUS" -ne 0 ]
     then
         TEST_MESSAGE="Unable to determine eMMC filesystem."
         test_skip
         return
     fi
 
-    if [ -z "$PARTITION" ]
+    FILESYSTEM=$(echo "$COMMAND_OUTPUT" | tr -d '[:space:]')
+
+    if [ -z "$FILESYSTEM" ]
     then
-        TEST_MESSAGE="No mounted eMMC filesystem partition found."
+        TEST_MESSAGE="Unable to determine eMMC filesystem."
         test_skip
         return
     fi
@@ -979,7 +849,7 @@ emmc_018()
             run_command \
                 "EMMC-018" \
                 "Verify Filesystem Health" \
-                "fsck -fn \"$PARTITION\""
+                "fsck -N \"$EMMC_DEVICE\""
 
             ;;
 
@@ -995,7 +865,7 @@ emmc_018()
             run_command \
                 "EMMC-018" \
                 "Verify Filesystem Health" \
-                "xfs_repair -n \"$PARTITION\""
+                "xfs_repair -n \"$EMMC_DEVICE\""
 
             ;;
 
@@ -1011,7 +881,7 @@ emmc_018()
             run_command \
                 "EMMC-018" \
                 "Verify Filesystem Health" \
-                "btrfs check --readonly \"$PARTITION\""
+                "btrfs check --readonly \"$EMMC_DEVICE\""
 
             ;;
 
@@ -1040,26 +910,23 @@ emmc_018()
 
 emmc_019()
 {
-    local TEST_FILE
+    local TEST_FILE=""
 
-    log_info "[EMMC-019] Verify Storage Read/Write Capability"
+    log_info "[EMMC-019] Verify Storage Read Write Capability"
 
-    if [ -z "$EMMC_TEST_DIR" ]
+    if ! emmc_create_test_directory
     then
-        if ! emmc_create_test_directory
-        then
-            TEST_MESSAGE="Unable to create eMMC test directory."
-            test_fail
-            return
-        fi
+        TEST_MESSAGE="Unable to create eMMC test directory."
+        test_fail
+        return
     fi
 
     TEST_FILE="${EMMC_TEST_DIR}/rw_test.bin"
 
     run_command \
         "EMMC-019" \
-        "Verify Storage Read/Write Capability" \
-        "echo 'eMMCStorageValidation' > \"$TEST_FILE\" && cat \"$TEST_FILE\""
+        "Verify Storage Read Write Capability" \
+        "echo 'eMMC StorageValidation' > \"$TEST_FILE\" && cat \"$TEST_FILE\""
 
     if [ "$COMMAND_STATUS" -ne 0 ]
     then
@@ -1068,7 +935,7 @@ emmc_019()
         return
     fi
 
-    if echo "$COMMAND_OUTPUT" | grep -q "eMMCStorageValidation"
+    if echo "$COMMAND_OUTPUT" | grep -q "eMMC StorageValidation"
     then
         TEST_MESSAGE="eMMC read/write capability verified."
         test_pass
@@ -1077,7 +944,7 @@ emmc_019()
         test_fail
     fi
 
-    rm -f "$TEST_FILE" 2>/dev/null
+    emmc_cleanup_test_file "$TEST_FILE"
 }
 
 ###############################################################################
@@ -1088,28 +955,19 @@ emmc_020()
 {
     log_info "[EMMC-020] Cleanup eMMC Test Files"
 
-    if [ -z "$EMMC_TEST_DIR" ]
-    then
-        TEST_MESSAGE="No eMMC temporary test directory found."
-        test_pass
-        return
-    fi
-
     run_command \
         "EMMC-020" \
         "Cleanup eMMC Test Files" \
-        "rm -rf \"$EMMC_TEST_DIR\""
+        "emmc_remove_test_directory"
 
     if [ "$COMMAND_STATUS" -eq 0 ]
     then
-        TEST_MESSAGE="Temporary eMMC test files removed successfully."
+        TEST_MESSAGE="eMMC temporary test files removed."
         test_pass
     else
         TEST_MESSAGE="Failed to cleanup eMMC temporary files."
         test_fail
     fi
-
-    EMMC_TEST_DIR=""
 }
 
 ###############################################################################
@@ -1409,26 +1267,30 @@ emmc_init()
     log_info "Starting eMMC Validation"
     log_info "========================================="
 
-    if [ -z "$EMMC_DEVICE" ]
+    #
+    # Verify configured eMMC device
+    #
+    run_command \
+        "EMMC-INIT" \
+        "Verify eMMC Device Initialization" \
+        "lsblk -dn -o NAME \"$EMMC_DEVICE\""
+
+    if [ "$COMMAND_STATUS" -ne 0 ]
     then
-        log_error "EMMC_DEVICE is not configured."
-        log_error "Please configure EMMC_DEVICE in config.sh."
+        log_error "eMMC device ${EMMC_DEVICE} does not exist."
         return 1
     fi
 
-    log_info "eMMC Device : $EMMC_DEVICE"
-
-    #if [ ! "$EMMC_DEVICE" ]
-    #then
-    #    log_error "eMMC device $EMMC_DEVICE does not exist."
-    #    return 1
-    #fi
-
+    #
+    # Register eMMC tests
+    #
     emmc_register_tests
+
+    return 0
 }
 
 ###############################################################################
-# Register tests when module is sourced
+# Module Initialization
 ###############################################################################
 
 emmc_init
@@ -1436,4 +1298,3 @@ emmc_init
 ###############################################################################
 # End Of File
 ###############################################################################
-
