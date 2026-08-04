@@ -196,19 +196,26 @@ LOCAL_DEVICE="/home/dhawal/learning/Linux_Protocol_Applications/validation-frame
 # SD Card Configuration
 ###############################################################################
 
-SDCARD_MOUNTPOINT="/mnt/sdcard_validation"
+# Optional mount point
+SDCARD_MOUNTPOINT_PATH="/mnt/sdcard_validation"
 
-SDCARD_TEST_DIR="${SDCARD_MOUNTPOINT}/sdcard_validation"
-
+# Sequential DD test size
 SDCARD_DD_COUNT=100
 
+# FIO test size
 SDCARD_FIO_SIZE="256M"
 
+# FIO runtime in seconds
 SDCARD_FIO_RUNTIME=60
 
-SDCARD_DEVICE_PARTITION=""
 
-SDCARD_MOUNTED_BY_TEST=0
+
+
+
+
+
+
+
 
 
 

@@ -41,7 +41,6 @@ REQUIRED_COMMANDS=(
     sync
     grep
     awk
-    sed
     tr
 )
 
@@ -86,25 +85,6 @@ sdcard_get_type()
 }
 
 ###############################################################################
-# Get SD card filesystem
-###############################################################################
-
-sdcard_get_filesystem()
-{
-    local DEVICE="$SDCARD_DEVICE"
-
-    blkid -o value -s TYPE "$DEVICE" 2>/dev/null
-
-    if [ $? -eq 0 ]
-    then
-        return 0
-    fi
-
-    lsblk -ln -o NAME,TYPE,FSTYPE "$DEVICE" 2>/dev/null |
-        awk '$3 != "" {print $3; exit}'
-}
-
-###############################################################################
 # Get SD card model
 ###############################################################################
 
@@ -114,14 +94,38 @@ sdcard_get_model()
 }
 
 ###############################################################################
+# Get SD card filesystem
+###############################################################################
+
+sdcard_get_filesystem()
+{
+    local DEVICE="$SDCARD_DEVICE"
+    local FS_TYPE
+
+    FS_TYPE=$(blkid -o value -s TYPE "$DEVICE" 2>/dev/null)
+
+    if [ -n "$FS_TYPE" ]
+    then
+        echo "$FS_TYPE"
+        return 0
+    fi
+
+    lsblk -ln -o NAME,TYPE,FSTYPE "$DEVICE" 2>/dev/null |
+        awk '$3 != "" {print $3; exit}'
+}
+
+###############################################################################
 # Find filesystem-bearing SD card device
 ###############################################################################
 
 sdcard_get_filesystem_device()
 {
     local DEVICE="$SDCARD_DEVICE"
+    local FS_TYPE
 
-    if blkid -o value -s TYPE "$DEVICE" 2>/dev/null | grep -q .
+    FS_TYPE=$(blkid -o value -s TYPE "$DEVICE" 2>/dev/null)
+
+    if [ -n "$FS_TYPE" ]
     then
         echo "$DEVICE"
         return 0
@@ -223,21 +227,6 @@ sdcard_create_test_directory()
 }
 
 ###############################################################################
-# Remove SD card test directory
-###############################################################################
-
-sdcard_remove_test_directory()
-{
-    if [ -n "$SDCARD_TEST_DIR" ]
-    then
-        rm -rf "$SDCARD_TEST_DIR" 2>/dev/null
-    elif [ -n "$SDCARD_MOUNTPOINT" ]
-    then
-        rm -rf "${SDCARD_MOUNTPOINT}/sdcard_validation" 2>/dev/null
-    fi
-}
-
-###############################################################################
 # Get SD card test file
 ###############################################################################
 
@@ -256,7 +245,7 @@ sdcard_get_test_file()
 ###############################################################################
 # Mount SD card
 #
-# This function is intentionally outside the test case.
+# This function is intentionally separate from SDCARD-002.
 ###############################################################################
 
 sdcard_mount_for_test()
@@ -275,7 +264,7 @@ sdcard_mount_for_test()
         return 1
     fi
 
-    FS_TYPE=$(blkid -o value -s TYPE "$DEVICE" 2>/dev/null || true)
+    FS_TYPE=$(blkid -o value -s TYPE "$DEVICE" 2>/dev/null)
 
     if [ -n "$FS_TYPE" ]
     then
@@ -290,7 +279,7 @@ sdcard_mount_for_test()
         return 1
     fi
 
-    EXISTING_MOUNT=$(findmnt -n -S "$MOUNT_DEVICE" -o TARGET 2>/dev/null || true)
+    EXISTING_MOUNT=$(findmnt -n -S "$MOUNT_DEVICE" -o TARGET 2>/dev/null)
 
     if [ -n "$EXISTING_MOUNT" ]
     then
@@ -353,16 +342,16 @@ sdcard_ensure_mounted()
 sdcard_filesystem_health_check()
 {
     local DEVICE="$SDCARD_DEVICE"
-    local FS_TYPE
     local CHECK_DEVICE
+    local FS_TYPE
 
-    FS_TYPE=$(blkid -o value -s TYPE "$DEVICE" 2>/dev/null || true)
+    FS_TYPE=$(blkid -o value -s TYPE "$DEVICE" 2>/dev/null)
 
-    if [ -z "$FS_TYPE" ]
+    if [ -n "$FS_TYPE" ]
     then
-        CHECK_DEVICE=$(sdcard_get_filesystem_device)
-    else
         CHECK_DEVICE="$DEVICE"
+    else
+        CHECK_DEVICE=$(sdcard_get_filesystem_device)
     fi
 
     if [ -z "$CHECK_DEVICE" ]
@@ -371,7 +360,7 @@ sdcard_filesystem_health_check()
         return 2
     fi
 
-    FS_TYPE=$(blkid -o value -s TYPE "$CHECK_DEVICE" 2>/dev/null || true)
+    FS_TYPE=$(blkid -o value -s TYPE "$CHECK_DEVICE" 2>/dev/null)
 
     if [ -z "$FS_TYPE" ]
     then
@@ -440,7 +429,264 @@ sdcard_filesystem_health_check()
 }
 
 ###############################################################################
-# SDCARD-001 : Device Detection / Identification
+# SDCARD-001 Command Helper
+###############################################################################
+
+sdcard_cmd_device_info()
+{
+    lsblk -dn -o NAME,SIZE,TYPE,FSTYPE,MODEL "$SDCARD_DEVICE"
+}
+
+###############################################################################
+# SDCARD-003 Command Helper
+###############################################################################
+
+sdcard_cmd_rw_test()
+{
+    local TEST_FILE
+
+    if ! sdcard_ensure_mounted
+    then
+        return 1
+    fi
+
+    if ! sdcard_create_test_directory
+    then
+        return 1
+    fi
+
+    TEST_FILE="${SDCARD_TEST_DIR}/sdcard_rw_test.txt"
+
+    touch "$TEST_FILE" &&
+    echo "SD Card Storage Validation Framework" > "$TEST_FILE" &&
+    grep -q "SD Card Storage Validation Framework" "$TEST_FILE" &&
+    cat "$TEST_FILE" >/dev/null &&
+    rm -f "$TEST_FILE" &&
+    [ ! -f "$TEST_FILE" ]
+}
+
+###############################################################################
+# SDCARD-004 Command Helper
+###############################################################################
+
+sdcard_cmd_capacity()
+{
+    if ! sdcard_ensure_mounted
+    then
+        return 1
+    fi
+
+    lsblk -dn -o SIZE "$SDCARD_DEVICE"
+    df -h "$SDCARD_MOUNTPOINT"
+}
+
+###############################################################################
+# SDCARD-005 Command Helper
+###############################################################################
+
+sdcard_cmd_sequential_write()
+{
+    if ! sdcard_ensure_mounted
+    then
+        return 1
+    fi
+
+    if ! sdcard_create_test_directory
+    then
+        return 1
+    fi
+
+    SDCARD_TEST_FILE="${SDCARD_TEST_DIR}/sdcard_performance_test.bin"
+
+    dd if=/dev/zero \
+       of="$SDCARD_TEST_FILE" \
+       bs=1M \
+       count="${SDCARD_DD_COUNT:-100}" \
+       conv=fsync \
+       status=progress
+}
+
+###############################################################################
+# SDCARD-006 Command Helper
+###############################################################################
+
+sdcard_cmd_sequential_read()
+{
+    if ! sdcard_ensure_mounted
+    then
+        return 1
+    fi
+
+    SDCARD_TEST_DIR="${SDCARD_MOUNTPOINT}/sdcard_validation"
+    SDCARD_TEST_FILE="${SDCARD_TEST_DIR}/sdcard_performance_test.bin"
+
+    if [ ! -f "$SDCARD_TEST_FILE" ]
+    then
+        echo "ERROR: Sequential write test file not found."
+        return 1
+    fi
+
+    dd if="$SDCARD_TEST_FILE" \
+       of=/dev/null \
+       bs=1M \
+       status=progress
+}
+
+###############################################################################
+# SDCARD-007 Command Helper
+###############################################################################
+
+sdcard_cmd_sync()
+{
+    sync
+}
+
+###############################################################################
+# SDCARD-009 Command Helper
+###############################################################################
+
+sdcard_cmd_fio_check()
+{
+    command -v fio
+}
+
+###############################################################################
+# SDCARD-010 Command Helper
+###############################################################################
+
+sdcard_cmd_fio_performance()
+{
+    local FIO_FILE
+
+    if ! sdcard_ensure_mounted
+    then
+        return 1
+    fi
+
+    if ! sdcard_create_test_directory
+    then
+        return 1
+    fi
+
+    FIO_FILE="${SDCARD_TEST_DIR}/sdcard_fio_test.bin"
+
+    fio \
+        --name=sdcard_validation \
+        --filename="$FIO_FILE" \
+        --size="${SDCARD_FIO_SIZE:-256M}" \
+        --rw=randrw \
+        --bs=4k \
+        --runtime="${SDCARD_FIO_RUNTIME:-60}" \
+        --time_based \
+        --group_reporting
+}
+
+###############################################################################
+# SD Card Cleanup Command
+###############################################################################
+
+sdcard_cmd_cleanup()
+{
+    local STATUS=0
+    local CLEANUP_DIR=""
+
+    echo "SDCARD_DEVICE=$SDCARD_DEVICE"
+    echo "SDCARD_MOUNTPOINT=$SDCARD_MOUNTPOINT"
+    echo "SDCARD_TEST_DIR=$SDCARD_TEST_DIR"
+    echo "SDCARD_MOUNTED_BY_TEST=$SDCARD_MOUNTED_BY_TEST"
+
+    #
+    # Determine validation directory.
+    #
+    if [ -n "$SDCARD_TEST_DIR" ]
+    then
+        CLEANUP_DIR="$SDCARD_TEST_DIR"
+    elif [ -n "$SDCARD_MOUNTPOINT" ]
+    then
+        CLEANUP_DIR="${SDCARD_MOUNTPOINT}/sdcard_validation"
+    fi
+
+    echo "CLEANUP_DIR=$CLEANUP_DIR"
+
+    ###########################################################################
+    # Remove validation directory
+    ###########################################################################
+
+    if [ -n "$CLEANUP_DIR" ] &&
+       [ -d "$CLEANUP_DIR" ]
+    then
+        rm -rf "$CLEANUP_DIR"
+
+        if [ $? -ne 0 ]
+        then
+            echo "ERROR: Failed to remove $CLEANUP_DIR"
+            STATUS=1
+        else
+            echo "Validation directory removed successfully."
+        fi
+    else
+        echo "Validation directory does not exist. Nothing to remove."
+    fi
+
+    ###########################################################################
+    # Synchronize filesystem
+    ###########################################################################
+
+    sync
+
+    if [ $? -ne 0 ]
+    then
+        echo "ERROR: sync failed."
+        STATUS=1
+    else
+        echo "Filesystem synchronized successfully."
+    fi
+
+    ###########################################################################
+    # Final unmount
+    #
+    # IMPORTANT:
+    # Only unmount if this validation framework mounted the SD card.
+    #
+    ###########################################################################
+
+    if [ "$SDCARD_MOUNTED_BY_TEST" -eq 1 ] &&
+       [ -n "$SDCARD_MOUNTPOINT" ]
+    then
+        echo "SD card was mounted by validation."
+        echo "Unmounting $SDCARD_MOUNTPOINT"
+
+        umount "$SDCARD_MOUNTPOINT"
+
+        if [ $? -ne 0 ]
+        then
+            echo "ERROR: Failed to unmount $SDCARD_MOUNTPOINT"
+            STATUS=1
+        else
+            echo "SD card unmounted successfully."
+
+            ###################################################################
+            # Verify unmount
+            ###################################################################
+
+            if findmnt -n -T "$SDCARD_MOUNTPOINT" >/dev/null 2>&1
+            then
+                echo "ERROR: SD card is still mounted."
+                STATUS=1
+            else
+                echo "Final unmount verified successfully."
+            fi
+        fi
+    else
+        echo "SD card was not mounted by validation."
+        echo "Existing system mount will not be unmounted."
+    fi
+
+    return "$STATUS"
+}
+
+###############################################################################
+# SDCARD-001 : Detect & Verify SD Card Device
 ###############################################################################
 
 sdcard_001()
@@ -456,7 +702,7 @@ sdcard_001()
     run_command \
         "SDCARD-001" \
         "Detect & Verify SD Card Device" \
-        "lsblk -dn -o NAME,SIZE,TYPE,FSTYPE,MODEL \"$SDCARD_DEVICE\""
+        "sdcard_cmd_device_info"
 
     if [ "$COMMAND_STATUS" -ne 0 ]
     then
@@ -498,81 +744,19 @@ sdcard_001()
 }
 
 ###############################################################################
-# SDCARD-002 : Filesystem & Mount Verification
+# SDCARD-002 : Mount SD Card
 ###############################################################################
 
 sdcard_002()
-{
-    local FILESYSTEM
-    local MOUNT_DEVICE
-    local MOUNTPOINT
-    local OPTIONS
-
-    log_info "[SDCARD-002] Verify SD Card Filesystem & Mount"
-
-    MOUNT_DEVICE=$(sdcard_get_filesystem_device)
-
-    if [ -z "$MOUNT_DEVICE" ]
-    then
-        TEST_MESSAGE="Unable to determine SD card filesystem device."
-        test_fail
-        return
-    fi
-
-    run_command \
-        "SDCARD-002" \
-        "Verify SD Card Filesystem & Mount" \
-        "blkid -o value -s TYPE \"$MOUNT_DEVICE\""
-
-    if [ "$COMMAND_STATUS" -ne 0 ]
-    then
-        TEST_MESSAGE="Unable to determine SD card filesystem."
-        test_fail
-        return
-    fi
-
-    FILESYSTEM=$(echo "$COMMAND_OUTPUT" | tr -d '[:space:]')
-
-    if [ -z "$FILESYSTEM" ]
-    then
-        TEST_MESSAGE="SD card filesystem type is empty."
-        test_fail
-        return
-    fi
-
-    MOUNTPOINT=$(findmnt -n -S "$MOUNT_DEVICE" -o TARGET 2>/dev/null || true)
-
-    if [ -n "$MOUNTPOINT" ]
-    then
-        OPTIONS=$(findmnt -n -T "$MOUNTPOINT" -o OPTIONS 2>/dev/null || true)
-
-        if echo "$OPTIONS" | grep -qw rw
-        then
-            TEST_MESSAGE="Filesystem=${FILESYSTEM}, Mount=${MOUNTPOINT}, Options=${OPTIONS}, Access=RW"
-        else
-            TEST_MESSAGE="Filesystem=${FILESYSTEM}, Mount=${MOUNTPOINT}, Options=${OPTIONS}, Access=Not-RW"
-        fi
-    else
-        TEST_MESSAGE="Filesystem=${FILESYSTEM}, Mount=Not currently mounted"
-    fi
-
-    test_pass
-}
-
-###############################################################################
-# SDCARD-003 : Mount SD Card
-###############################################################################
-
-sdcard_003()
 {
     local MOUNT_DEVICE
     local MOUNTPOINT
     local MOUNTED_BY_TEST
 
-    log_info "[SDCARD-003] Mount SD Card"
+    log_info "[SDCARD-002] Mount SD Card"
 
     run_command \
-        "SDCARD-003" \
+        "SDCARD-002" \
         "Mount SD Card" \
         "sdcard_mount_for_test"
 
@@ -609,42 +793,17 @@ sdcard_003()
 }
 
 ###############################################################################
-# SDCARD-004 : Read / Write Access
+# SDCARD-003 : Read / Write Access
 ###############################################################################
 
-sdcard_004()
+sdcard_003()
 {
-    local TEST_FILE
-    local COMMAND
-
-    log_info "[SDCARD-004] Verify SD Card Read/Write Access"
-
-    if ! sdcard_ensure_mounted
-    then
-        TEST_MESSAGE="Unable to mount SD card for read/write validation."
-        test_fail
-        return
-    fi
-
-    SDCARD_TEST_DIR="${SDCARD_MOUNTPOINT}/sdcard_validation"
-    SDCARD_TEST_FILE="${SDCARD_TEST_DIR}/sdcard_rw_test.txt"
-
-    TEST_FILE="$SDCARD_TEST_FILE"
-
-    COMMAND="
-        mkdir -p \"$SDCARD_TEST_DIR\" &&
-        touch \"$TEST_FILE\" &&
-        echo 'SD Card Storage Validation Framework' > \"$TEST_FILE\" &&
-        grep -q 'SD Card Storage Validation Framework' \"$TEST_FILE\" &&
-        cat \"$TEST_FILE\" &&
-        rm -f \"$TEST_FILE\" &&
-        [ ! -f \"$TEST_FILE\" ]
-    "
+    log_info "[SDCARD-003] Verify SD Card Read/Write Access"
 
     run_command \
-        "SDCARD-004" \
+        "SDCARD-003" \
         "Verify SD Card Read/Write Access" \
-        "$COMMAND"
+        "sdcard_cmd_rw_test"
 
     if [ "$COMMAND_STATUS" -ne 0 ]
     then
@@ -659,32 +818,23 @@ sdcard_004()
 }
 
 ###############################################################################
-# SDCARD-005 : Capacity / Usage
+# SDCARD-004 : Capacity / Usage
 ###############################################################################
 
-sdcard_005()
+sdcard_004()
 {
+    local OUTPUT
     local SIZE
     local USED
     local AVAILABLE
     local UTILIZATION
-    local MOUNTPOINT
 
-    log_info "[SDCARD-005] Verify SD Card Capacity & Usage"
-
-    if ! sdcard_ensure_mounted
-    then
-        TEST_MESSAGE="Unable to mount SD card for capacity validation."
-        test_fail
-        return
-    fi
-
-    MOUNTPOINT="$SDCARD_MOUNTPOINT"
+    log_info "[SDCARD-004] Verify SD Card Capacity & Usage"
 
     run_command \
-        "SDCARD-005" \
+        "SDCARD-004" \
         "Verify SD Card Capacity & Usage" \
-        "lsblk -dn -o SIZE \"$SDCARD_DEVICE\" && df -h \"$MOUNTPOINT\""
+        "sdcard_cmd_capacity"
 
     if [ "$COMMAND_STATUS" -ne 0 ]
     then
@@ -693,18 +843,20 @@ sdcard_005()
         return
     fi
 
-    SIZE=$(echo "$COMMAND_OUTPUT" |
+    OUTPUT="$COMMAND_OUTPUT"
+
+    SIZE=$(echo "$OUTPUT" |
         head -n 1 |
         tr -d '[:space:]')
 
-    USED=$(echo "$COMMAND_OUTPUT" |
-        awk 'NR==3 {print $3}')
+    USED=$(echo "$OUTPUT" |
+        awk 'NR==2 {print $3}')
 
-    AVAILABLE=$(echo "$COMMAND_OUTPUT" |
-        awk 'NR==3 {print $4}')
+    AVAILABLE=$(echo "$OUTPUT" |
+        awk 'NR==2 {print $4}')
 
-    UTILIZATION=$(echo "$COMMAND_OUTPUT" |
-        awk 'NR==3 {print $5}')
+    UTILIZATION=$(echo "$OUTPUT" |
+        awk 'NR==2 {print $5}')
 
     if [ -z "$SIZE" ]
     then
@@ -719,29 +871,17 @@ sdcard_005()
 }
 
 ###############################################################################
-# SDCARD-006 : Sequential Write Performance
+# SDCARD-005 : Sequential Write
 ###############################################################################
 
-sdcard_006()
+sdcard_005()
 {
-    log_info "[SDCARD-006] Verify Sequential Write Performance"
-
-    if ! sdcard_ensure_mounted
-    then
-        TEST_MESSAGE="Unable to mount SD card for sequential write test."
-        test_fail
-        return
-    fi
-
-    SDCARD_TEST_DIR="${SDCARD_MOUNTPOINT}/sdcard_validation"
-    SDCARD_TEST_FILE="${SDCARD_TEST_DIR}/sdcard_performance_test.bin"
-
-    mkdir -p "$SDCARD_TEST_DIR"
+    log_info "[SDCARD-005] Verify Sequential Write Performance"
 
     run_command \
-        "SDCARD-006" \
+        "SDCARD-005" \
         "Verify Sequential Write Performance" \
-        "dd if=/dev/zero of=\"$SDCARD_TEST_FILE\" bs=1M count=\"${SDCARD_DD_COUNT:-100}\" conv=fsync status=progress"
+        "sdcard_cmd_sequential_write"
 
     if [ "$COMMAND_STATUS" -ne 0 ]
     then
@@ -756,34 +896,17 @@ sdcard_006()
 }
 
 ###############################################################################
-# SDCARD-007 : Sequential Read Performance
+# SDCARD-006 : Sequential Read
 ###############################################################################
 
-sdcard_007()
+sdcard_006()
 {
-    log_info "[SDCARD-007] Verify Sequential Read Performance"
-
-    if ! sdcard_ensure_mounted
-    then
-        TEST_MESSAGE="Unable to mount SD card for sequential read test."
-        test_fail
-        return
-    fi
-
-    SDCARD_TEST_DIR="${SDCARD_MOUNTPOINT}/sdcard_validation"
-    SDCARD_TEST_FILE="${SDCARD_TEST_DIR}/sdcard_performance_test.bin"
-
-    if [ ! -f "$SDCARD_TEST_FILE" ]
-    then
-        TEST_MESSAGE="Sequential write test file not found."
-        test_fail
-        return
-    fi
+    log_info "[SDCARD-006] Verify Sequential Read Performance"
 
     run_command \
-        "SDCARD-007" \
+        "SDCARD-006" \
         "Verify Sequential Read Performance" \
-        "dd if=\"$SDCARD_TEST_FILE\" of=/dev/null bs=1M status=progress"
+        "sdcard_cmd_sequential_read"
 
     if [ "$COMMAND_STATUS" -ne 0 ]
     then
@@ -798,17 +921,17 @@ sdcard_007()
 }
 
 ###############################################################################
-# SDCARD-008 : Filesystem Synchronization
+# SDCARD-007 : Sync
 ###############################################################################
 
-sdcard_008()
+sdcard_007()
 {
-    log_info "[SDCARD-008] Verify Filesystem Synchronization"
+    log_info "[SDCARD-007] Verify Filesystem Synchronization"
 
     run_command \
-        "SDCARD-008" \
+        "SDCARD-007" \
         "Verify Filesystem Synchronization" \
-        "sync"
+        "sdcard_cmd_sync"
 
     if [ "$COMMAND_STATUS" -ne 0 ]
     then
@@ -823,21 +946,21 @@ sdcard_008()
 }
 
 ###############################################################################
-# SDCARD-009 : Filesystem Health
+# SDCARD-008 : Filesystem Health
 ###############################################################################
 
-sdcard_009()
+sdcard_008()
 {
-    log_info "[SDCARD-009] Verify Filesystem Health"
+    log_info "[SDCARD-008] Verify Filesystem Health"
 
     run_command \
-        "SDCARD-009" \
+        "SDCARD-008" \
         "Verify Filesystem Health" \
         "sdcard_filesystem_health_check"
 
     if [ "$COMMAND_STATUS" -eq 3 ]
     then
-        TEST_MESSAGE="Filesystem health check utility is unavailable or filesystem is unsupported."
+        TEST_MESSAGE="Filesystem health utility is unavailable or filesystem is unsupported."
         test_skip
         return
     fi
@@ -855,17 +978,17 @@ sdcard_009()
 }
 
 ###############################################################################
-# SDCARD-010 : FIO Availability
+# SDCARD-009 : FIO Availability
 ###############################################################################
 
-sdcard_010()
+sdcard_009()
 {
-    log_info "[SDCARD-010] Verify FIO Availability"
+    log_info "[SDCARD-009] Verify FIO Availability"
 
     run_command \
-        "SDCARD-010" \
+        "SDCARD-009" \
         "Verify FIO Availability" \
-        "command -v fio"
+        "sdcard_cmd_fio_check"
 
     if [ "$COMMAND_STATUS" -ne 0 ]
     then
@@ -880,31 +1003,17 @@ sdcard_010()
 }
 
 ###############################################################################
-# SDCARD-011 : FIO Performance Test
+# SDCARD-010 : FIO Performance
 ###############################################################################
 
-sdcard_011()
+sdcard_010()
 {
-    local FIO_FILE
-
-    log_info "[SDCARD-011] Run FIO Performance Test"
-
-    if ! sdcard_ensure_mounted
-    then
-        TEST_MESSAGE="Unable to mount SD card for fio performance test."
-        test_fail
-        return
-    fi
-
-    SDCARD_TEST_DIR="${SDCARD_MOUNTPOINT}/sdcard_validation"
-    FIO_FILE="${SDCARD_TEST_DIR}/sdcard_fio_test.bin"
-
-    mkdir -p "$SDCARD_TEST_DIR"
+    log_info "[SDCARD-010] Run FIO Performance Test"
 
     run_command \
-        "SDCARD-011" \
+        "SDCARD-010" \
         "Run FIO Performance Test" \
-        "fio --name=sdcard_validation --filename=\"$FIO_FILE\" --size=\"${SDCARD_FIO_SIZE:-256M}\" --rw=randrw --bs=4k --runtime=\"${SDCARD_FIO_RUNTIME:-60}\" --time_based --group_reporting"
+        "sdcard_cmd_fio_performance"
 
     if [ "$COMMAND_STATUS" -ne 0 ]
     then
@@ -919,49 +1028,17 @@ sdcard_011()
 }
 
 ###############################################################################
-# SDCARD-012 : Cleanup + Final Unmount
+# SDCARD-011 : Cleanup + Final Unmount
 ###############################################################################
 
-sdcard_012()
+sdcard_011()
 {
-    local COMMAND
-
-    log_info "[SDCARD-012] Cleanup SD Card Test Files and Final Unmount"
-
-    COMMAND='
-        STATUS=0
-
-        #
-        # Synchronize filesystem before cleanup.
-        #
-        sync || STATUS=1
-
-        #
-        # Remove validation directory.
-        #
-        if [ -n "'"$SDCARD_TEST_DIR"'" ] &&
-           [ -d "'"$SDCARD_TEST_DIR"'" ]
-        then
-            rm -rf "'"$SDCARD_TEST_DIR"'" || STATUS=1
-        fi
-
-        #
-        # Final unmount only if this validation mounted
-        # the SD card.
-        #
-        if [ "'"$SDCARD_MOUNTED_BY_TEST"'" -eq 1 ] &&
-           [ -n "'"$SDCARD_MOUNTPOINT"'" ]
-        then
-            umount "'"$SDCARD_MOUNTPOINT"'" || STATUS=1
-        fi
-
-        exit $STATUS
-    '
+    log_info "[SDCARD-011] Cleanup + Final Unmount"
 
     run_command \
-        "SDCARD-012" \
-        "Cleanup SD Card Test Files and Final Unmount" \
-        "$COMMAND"
+        "SDCARD-011" \
+        "Cleanup + Final Unmount" \
+        "sdcard_cmd_cleanup"
 
     if [ "$COMMAND_STATUS" -ne 0 ]
     then
@@ -970,13 +1047,16 @@ sdcard_012()
         return
     fi
 
-    SDCARD_MOUNTPOINT=""
-    SDCARD_DEVICE_PARTITION=""
-    SDCARD_MOUNTED_BY_TEST=0
-    SDCARD_TEST_DIR=""
+    #
+    # Reset runtime variables after successful cleanup.
+    #
     SDCARD_TEST_FILE=""
+    SDCARD_TEST_DIR=""
+    SDCARD_DEVICE_PARTITION=""
+    SDCARD_MOUNTPOINT=""
+    SDCARD_MOUNTED_BY_TEST=0
 
-    TEST_MESSAGE="SD card validation files cleaned and final unmount completed successfully."
+    TEST_MESSAGE="SD card validation files removed, filesystem synchronized, and final unmount completed successfully."
 
     test_pass
 }
@@ -1004,25 +1084,11 @@ sdcard_register_tests()
     register_test \
         -i "SDCARD-002" \
         -f sdcard_002 \
-        -n "Verify SD Card Filesystem & Mount" \
-        -c "storage" \
-        -t "auto" \
-        -p "high" \
-        -o 20 \
-        -g "sdcard,filesystem,mount" \
-        -w "Embedded Team" \
-        -b "Linux" \
-        -e "yes" \
-        -d "Verify SD card filesystem, mount point and read-write status."
-
-    register_test \
-        -i "SDCARD-003" \
-        -f sdcard_003 \
         -n "Mount SD Card" \
         -c "storage" \
         -t "auto" \
         -p "high" \
-        -o 30 \
+        -o 20 \
         -g "sdcard,mount" \
         -w "Embedded Team" \
         -b "Linux" \
@@ -1030,41 +1096,41 @@ sdcard_register_tests()
         -d "Automatically mount the SD card filesystem when required."
 
     register_test \
-        -i "SDCARD-004" \
-        -f sdcard_004 \
+        -i "SDCARD-003" \
+        -f sdcard_003 \
         -n "Verify SD Card Read/Write Access" \
         -c "storage" \
         -t "auto" \
         -p "medium" \
-        -o 40 \
+        -o 30 \
         -g "sdcard,read,write,file" \
         -w "Embedded Team" \
         -b "Linux" \
         -e "yes" \
-        -d "Verify SD card file creation, write, read and deletion."
+        -d "Verify SD card file create, write, read and delete operations."
 
     register_test \
-        -i "SDCARD-005" \
-        -f sdcard_005 \
+        -i "SDCARD-004" \
+        -f sdcard_004 \
         -n "Verify SD Card Capacity & Usage" \
         -c "storage" \
         -t "auto" \
         -p "medium" \
-        -o 50 \
-        -g "sdcard,capacity,usage,df" \
+        -o 40 \
+        -g "sdcard,capacity,usage,lsblk,df" \
         -w "Embedded Team" \
         -b "Linux" \
         -e "yes" \
         -d "Verify SD card capacity and filesystem usage."
 
     register_test \
-        -i "SDCARD-006" \
-        -f sdcard_006 \
+        -i "SDCARD-005" \
+        -f sdcard_005 \
         -n "Verify Sequential Write Performance" \
         -c "performance" \
         -t "auto" \
         -p "high" \
-        -o 60 \
+        -o 50 \
         -g "sdcard,dd,write,performance" \
         -w "Embedded Team" \
         -b "Linux" \
@@ -1072,13 +1138,13 @@ sdcard_register_tests()
         -d "Measure SD card sequential write performance."
 
     register_test \
-        -i "SDCARD-007" \
-        -f sdcard_007 \
+        -i "SDCARD-006" \
+        -f sdcard_006 \
         -n "Verify Sequential Read Performance" \
         -c "performance" \
         -t "auto" \
         -p "high" \
-        -o 70 \
+        -o 60 \
         -g "sdcard,dd,read,performance" \
         -w "Embedded Team" \
         -b "Linux" \
@@ -1086,13 +1152,13 @@ sdcard_register_tests()
         -d "Measure SD card sequential read performance."
 
     register_test \
-        -i "SDCARD-008" \
-        -f sdcard_008 \
+        -i "SDCARD-007" \
+        -f sdcard_007 \
         -n "Verify Filesystem Synchronization" \
         -c "storage" \
         -t "auto" \
         -p "medium" \
-        -o 80 \
+        -o 70 \
         -g "sdcard,sync" \
         -w "Embedded Team" \
         -b "Linux" \
@@ -1100,27 +1166,27 @@ sdcard_register_tests()
         -d "Verify filesystem buffer synchronization."
 
     register_test \
-        -i "SDCARD-009" \
-        -f sdcard_009 \
+        -i "SDCARD-008" \
+        -f sdcard_008 \
         -n "Verify Filesystem Health" \
         -c "storage" \
         -t "auto" \
         -p "medium" \
-        -o 90 \
+        -o 80 \
         -g "sdcard,filesystem,fsck,health" \
         -w "Embedded Team" \
         -b "Linux" \
         -e "yes" \
-        -d "Verify SD card filesystem integrity using a read-only filesystem check."
+        -d "Verify SD card filesystem health using a read-only filesystem check."
 
     register_test \
-        -i "SDCARD-010" \
-        -f sdcard_010 \
+        -i "SDCARD-009" \
+        -f sdcard_009 \
         -n "Verify FIO Availability" \
         -c "performance" \
         -t "auto" \
         -p "low" \
-        -o 100 \
+        -o 90 \
         -g "sdcard,fio" \
         -w "Embedded Team" \
         -b "Linux" \
@@ -1128,13 +1194,13 @@ sdcard_register_tests()
         -d "Verify fio utility availability."
 
     register_test \
-        -i "SDCARD-011" \
-        -f sdcard_011 \
+        -i "SDCARD-010" \
+        -f sdcard_010 \
         -n "Run FIO Performance Test" \
         -c "performance" \
         -t "auto" \
         -p "high" \
-        -o 110 \
+        -o 100 \
         -g "sdcard,fio,performance" \
         -w "Embedded Team" \
         -b "Linux" \
@@ -1142,18 +1208,18 @@ sdcard_register_tests()
         -d "Run fio random read/write performance benchmark."
 
     register_test \
-        -i "SDCARD-012" \
-        -f sdcard_012 \
-        -n "Cleanup SD Card Test Files and Final Unmount" \
+        -i "SDCARD-011" \
+        -f sdcard_011 \
+        -n "Cleanup + Final Unmount" \
         -c "storage" \
         -t "auto" \
         -p "low" \
-        -o 120 \
-        -g "sdcard,cleanup,unmount" \
+        -o 110 \
+        -g "sdcard,cleanup,unmount,sync" \
         -w "Embedded Team" \
         -b "Linux" \
         -e "yes" \
-        -d "Remove temporary SD card validation files and perform final unmount."
+        -d "Remove validation files, synchronize filesystem and perform final SD card unmount."
 }
 
 ###############################################################################
@@ -1167,10 +1233,13 @@ sdcard_init()
     log_info "========================================="
 
     #
-    # SDCARD_DEVICE comes from config.sh.
+    # SDCARD_DEVICE is provided by config.sh.
     #
-    # Do not call test_fail() here because this is not a registered test.
-    # SDCARD-001 owns SD card device validation.
+    # The module is executed using:
+    #
+    #     ./validate.sh sdcard
+    #
+    # No device argument is expected from the command line.
     #
     if [ -z "$SDCARD_DEVICE" ]
     then
@@ -1180,6 +1249,13 @@ sdcard_init()
     fi
 
     log_info "Configured SD Card Device : $SDCARD_DEVICE"
+
+    if [ -n "$SDCARD_MOUNTPOINT_PATH" ]
+    then
+        log_info "Configured SD Card Mountpoint : $SDCARD_MOUNTPOINT_PATH"
+    else
+        log_info "SD Card Mountpoint : /mnt/sdcard_validation"
+    fi
 
     sdcard_register_tests
 
@@ -1195,3 +1271,4 @@ sdcard_init
 ###############################################################################
 # End Of File
 ###############################################################################
+
