@@ -169,12 +169,20 @@ EMMC_FIO_SIZE="256M"
 EMMC_FIO_RUNTIME=60
 
 ###############################################################################
+# eMMC Mount Configuration
+###############################################################################
+
+EMMC_MOUNTPOINT="/mnt/emmc_validation"
+
+EMMC_MOUNTED_BY_TEST=0
+
+###############################################################################
 # Storage Devices
 ###############################################################################
 
 EMMC_DEVICE="/dev/mmcblk0"
 
-SDCARD_DEVICE="/dev/mmcblk0"
+SDCARD_DEVICE="/dev/sdb"
 
 NVME_DEVICE="/dev/nvme0n1"
 
@@ -185,15 +193,22 @@ USB_DEVICE="/dev/sdb"
 LOCAL_DEVICE="/home/dhawal/learning/Linux_Protocol_Applications/validation-framework/test"
 
 ###############################################################################
-# Storage Device Selection
+# SD Card Configuration
 ###############################################################################
 
-STORAGE_DEVICE=""
+SDCARD_MOUNTPOINT="/mnt/sdcard_validation"
 
-STORAGE_DEVICES=()
+SDCARD_TEST_DIR="${SDCARD_MOUNTPOINT}/sdcard_validation"
 
-STORAGE_MOUNTPOINT=""
+SDCARD_DD_COUNT=100
 
+SDCARD_FIO_SIZE="256M"
+
+SDCARD_FIO_RUNTIME=60
+
+SDCARD_DEVICE_PARTITION=""
+
+SDCARD_MOUNTED_BY_TEST=0
 
 
 
