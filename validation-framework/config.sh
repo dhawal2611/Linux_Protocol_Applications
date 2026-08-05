@@ -188,8 +188,6 @@ NVME_DEVICE="/dev/nvme0n1"
 
 SATA_DEVICE="/dev/sda"
 
-USB_DEVICE="/dev/sdb"
-
 LOCAL_DEVICE="/home/dhawal/learning/Linux_Protocol_Applications/validation-framework/test"
 
 ###############################################################################
@@ -207,6 +205,38 @@ SDCARD_FIO_SIZE="256M"
 
 # FIO runtime in seconds
 SDCARD_FIO_RUNTIME=60
+
+###############################################################################
+# SATA Configuration
+###############################################################################
+
+SATA_MOUNTPOINT_PATH="/mnt/sata_validation"
+
+SATA_DD_COUNT=100
+
+SATA_FIO_SIZE="256M"
+SATA_FIO_RUNTIME=60
+
+###############################################################################
+# USB Validation Configuration
+###############################################################################
+
+# USB validation configuration
+
+USB_DEVICE="/dev/sdb"
+
+USB_TEST_FILE="usb_validation_test.bin"
+USB_TEST_SIZE=100
+USB_PERF_SIZE=100
+USB_FIO_SIZE="256M"
+USB_FIO_RUNTIME=30
+
+
+
+
+
+
+
 
 
 
@@ -325,21 +355,6 @@ SGMII_PEER_IP="192.168.1.101"
 # iPerf3 Server IP Address
 SGMII_IPERF_SERVER="192.168.1.100"
 
-###############################################################################
-# USB Configuration
-###############################################################################
-
-# USB Storage Device
-USB_DEVICE="/dev/sda1"
-
-# USB Mount Point
-USB_MOUNT_POINT="/mnt"
-
-# USB Test File
-USB_TEST_FILE="test.bin"
-
-# Test File Size (MB)
-USB_TEST_SIZE=100
 
 ###############################################################################
 # RTC Configuration
