@@ -188,7 +188,9 @@ NVME_DEVICE="/dev/nvme0n1"
 
 SATA_DEVICE="/dev/sda"
 
-LOCAL_DEVICE="/home/dhawal/learning/Linux_Protocol_Applications/validation-framework/test"
+USB_DEVICE="/dev/sdb"
+
+#LOCAL_DEVICE="/home/dhawal/learning/Linux_Protocol_Applications/validation-framework/test"
 
 ###############################################################################
 # SD Card Configuration
@@ -223,343 +225,256 @@ SATA_FIO_RUNTIME=60
 
 # USB validation configuration
 
-USB_DEVICE="/dev/sdb"
-
 USB_TEST_FILE="usb_validation_test.bin"
 USB_TEST_SIZE=100
 USB_PERF_SIZE=100
 USB_FIO_SIZE="256M"
 USB_FIO_RUNTIME=30
 
+###############################################################################
+# I2C VALIDATION CONFIGURATION
+###############################################################################
 
+###############################################################################
+# I2C BUS CONFIGURATION
+###############################################################################
+#
+# Leave I2C_BUSES empty to automatically detect all available I2C buses
+# using:
+#
+#     i2cdetect -l
+#
+# Example detected buses on Raspberry Pi:
+#
+#     i2c-1
+#     i2c-20
+#     i2c-21
+#
+# If required, specific buses can be restricted:
+#
+#     I2C_BUSES="0 1"
+#
+###############################################################################
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+I2C_BUSES=""
 
 
 ###############################################################################
-# GPIO Configuration
+# I2C0 - TEMPERATURE SENSOR
+###############################################################################
+#
+# Device     : TMP1075NDRLR
+# Quantity   : 2
+# Bus        : I2C0
+# Speed      : 400 kHz
+#
 ###############################################################################
 
-# Default GPIO Number
-GPIO_NUM=24
+I2C_TMP1075_BUS=0
 
-# GPIO Sysfs Path
-GPIO_SYSFS=/sys/class/gpio
+I2C_TMP1075_ADDR_1=0x48
+I2C_TMP1075_ADDR_2=0x49
 
-# GPIO Node
-GPIO_PATH=$GPIO_SYSFS/gpio$GPIO_NUM
-
-GPIO_LIST=(
-24
-25
-26
-27
-)
-
-###############################################################################
-# Ethernet Configuration
-###############################################################################
-
-# Network Interface
-ETH_INTERFACE="eth0"
-
-# Gateway IP Address
-GATEWAY_IP="192.168.1.1"
-
-# iPerf3 Server IP Address
-IPERF_SERVER="192.168.1.100"
-
-# Peer IP Address (for Jumbo Frame Test)
-PEER_IP="192.168.1.101"
-
-# Jumbo Frame MTU
-JUMBO_MTU=9000
-
-###############################################################################
-# GbE PHY Configuration
-###############################################################################
-
-# Ethernet Interface
-ETH_INTERFACE="eth0"
-
-# PHY Address
-PHY_ADDR="0"
-
-# PHY Register (BMCR = Register 0)
-PHY_BMCR_REG="0"
-
-###############################################################################
-# DHCP Configuration
-###############################################################################
-
-# Ethernet Interface
-ETH_INTERFACE="eth0"
-
-###############################################################################
-# SSH Configuration
-###############################################################################
-
-# DUT IP Address
-DUT_IP="192.168.1.100"
-
-# SSH User
-SSH_USER="root"
-
-# Test File for SCP
-SCP_TEST_FILE="test.bin"
-
-# Destination Directory
-SCP_DEST="/tmp"
-
-###############################################################################
-# SerDes Configuration
-###############################################################################
-SERDES_PRBS_CMD="vendor_prbs_tool start"
-
-###############################################################################
-# SGMII Configuration
-###############################################################################
-
-# SGMII Interface
-SGMII_INTERFACE="eth0"
-
-# Peer IP Address
-SGMII_PEER_IP="192.168.1.101"
-
-# iPerf3 Server IP Address
-SGMII_IPERF_SERVER="192.168.1.100"
+I2C_TMP1075_SPEED=400000
 
 
 ###############################################################################
-# RTC Configuration
+# I2C0 - EEPROM
+###############################################################################
+#
+# Device     : 24LC64T-E/MNY
+# Bus        : I2C0
+# Address    : 0x50
+# Speed      : 400 kHz
+#
 ###############################################################################
 
-# RTC Device
-RTC_DEVICE="rtc0"
+I2C_EEPROM_BUS=0
+I2C_EEPROM_ADDR=0x50
+I2C_EEPROM_SPEED=400000
 
-# RTC Sysfs Path
-RTC_SYSFS="/sys/class/rtc/${RTC_DEVICE}"
-
-# RTC Alarm Time (Seconds)
-RTC_ALARM_SEC=60
 
 ###############################################################################
-# Watchdog Configuration
+# I2C0 - CURRENT SENSOR
+###############################################################################
+#
+# Device     : PAC1931T-I/J6CX
+# Bus        : I2C0
+# Address    : 0x1F
+# Address is hardware configurable using resistor combination.
+# Schematic address : 0x1F
+# Speed      : 400 kHz
+#
 ###############################################################################
 
-# Watchdog Device
-WATCHDOG_DEVICE="/dev/watchdog"
+I2C_CURRENT_SENSOR_BUS=0
+I2C_CURRENT_SENSOR_ADDR=0x1F
+I2C_CURRENT_SENSOR_SPEED=400000
 
-# Watchdog Timeout (Seconds)
-WATCHDOG_TIMEOUT=30
-
-###############################################################################
-# systemd Configuration
-###############################################################################
-
-# Service used for systemd validation
-SYSTEMD_SERVICE="sshd"
 
 ###############################################################################
-# Journald Configuration
+# I2C1 - AUTHENTICATION IC
+###############################################################################
+#
+# Device     : ATECC608B
+# Manufacturer: Microchip Technology
+# Bus        : I2C1
+# Address    : 0x60
+# Speed      : 1 MHz
+#
 ###############################################################################
 
-# Exported Journal Log
-JOURNAL_EXPORT="/tmp/journal.log"
+I2C_AUTH_BUS=1
+I2C_AUTH_ADDR=0x60
+I2C_AUTH_SPEED=1000000
 
-# Vacuum Time
-JOURNAL_VACUUM_TIME="1d"
-
-# Persistent Journal Directory
-JOURNAL_DIR="/var/log/journal"
 
 ###############################################################################
-# Suspend / Resume Configuration
+# GENERIC I2C DEVICE
+###############################################################################
+#
+# Used for:
+#
+#     I2C-009 : Verify Generic Slave Address
+#     I2C-010 : Generic Read
+#     I2C-011 : Generic Write
+#     I2C-012 : Generic Write + Readback
+#
+# Default generic device:
+#
+#     Bus     : I2C1
+#     Address : 0x38
+#
 ###############################################################################
 
-# RTC Device
-RTC_DEVICE="rtc0"
+I2C_GENERIC_BUS=1
+I2C_GENERIC_ADDRESS=0x38
 
-# RTC Wake Alarm (Seconds)
-SUSPEND_WAKEUP_TIME=60
-
-# Gateway IP Address
-SUSPEND_GATEWAY_IP="192.168.1.1"
 
 ###############################################################################
-# Power Cycle Configuration
+# GENERIC I2C READ
+###############################################################################
+#
+# Example transaction:
+#
+#     i2ctransfer -y 1 w1@0x38 0x00 r1
+#
 ###############################################################################
 
-# Root filesystem partition
-ROOTFS_PARTITION="/dev/mmcblk0p2"
+I2C_GENERIC_READ_REGISTER=0x00
+I2C_GENERIC_READ_LENGTH=1
+
 
 ###############################################################################
-# Long Duration Stress Configuration
+# GENERIC I2C WRITE
+###############################################################################
+#
+# Example transaction:
+#
+#     i2ctransfer -y 1 w2@0x38 0x00 0x12
+#
 ###############################################################################
 
-# Stress Duration (Seconds)
-STRESS_DURATION=86400
+I2C_GENERIC_WRITE_REGISTER=0x00
+I2C_GENERIC_WRITE_VALUE=0x12
 
-# CPU Workers
-STRESS_CPU_WORKERS=4
-
-# Memory Workers
-STRESS_VM_WORKERS=4
-
-# Memory Usage
-STRESS_VM_BYTES="80%"
-
-# iperf3 Server
-IPERF3_SERVER="192.168.1.100"
-
-# Thermal Zone
-THERMAL_ZONE="/sys/class/thermal/thermal_zone0/temp"
-
-# Temperature Sampling Interval
-TEMP_MONITOR_INTERVAL=60
 
 ###############################################################################
-# Crypto Configuration
+# GENERIC I2C WRITE + READBACK
+###############################################################################
+#
+# Write:
+#
+#     i2ctransfer -y 1 w2@0x38 0x00 0x12
+#
+# Readback:
+#
+#     i2ctransfer -y 1 w1@0x38 0x00 r1
+#
 ###############################################################################
 
-# Crypto Module Pattern
-CRYPTO_MODULE_PATTERN="crypto"
+I2C_GENERIC_READBACK_REGISTER=0x00
+I2C_GENERIC_READBACK_LENGTH=1
 
-# Crypto Driver Log Pattern
-CRYPTO_DMESG_PATTERN="crypto"
-
-# Proc Crypto File
-PROC_CRYPTO="/proc/crypto"
 
 ###############################################################################
-# OpenSSL Validation Configuration
+# GENERIC I2C DEVICE LIST
+###############################################################################
+#
+# Format:
+#
+#     BUS:ADDRESS
+#
+# Example:
+#
+#     I2C_GENERIC_DEVICES="1:0x38"
+#
+# Multiple generic devices can be configured:
+#
+#     I2C_GENERIC_DEVICES="1:0x38 1:0x50 20:0x20"
+#
+# The I2C validation module can use this list to validate all configured
+# generic devices.
+#
 ###############################################################################
 
-# Test File Name
-CRYPTO_TEST_FILE="test.bin"
+I2C_GENERIC_DEVICES="1:0x38"
 
-# Encrypted File
-CRYPTO_ENC_FILE="test.enc"
-
-# Decrypted File
-CRYPTO_DEC_FILE="test_dec.bin"
-
-# Test File Size (MB)
-CRYPTO_TEST_SIZE_MB=100
-
-# Encryption Password
-CRYPTO_PASSWORD="password"
-
-# Encryption Algorithm
-CRYPTO_AES_ALGO="aes-256-cbc"
 
 ###############################################################################
-# Crypto Benchmark Configuration
+# I2C VALIDATION OPTIONS
+###############################################################################
+#
+# Automatically scan all available I2C buses.
+#
+# 1 = Enable automatic bus discovery
+# 0 = Use I2C_BUSES variable
+#
 ###############################################################################
 
-# OpenSSL Benchmark Duration (seconds)
-OPENSSL_BENCH_TIME=10
+I2C_AUTO_DISCOVER_BUSES=1
 
-# Enable Vendor HW Crypto Benchmark
-ENABLE_HW_CRYPTO_TEST=0
-
-# Vendor Specific HW Benchmark Command
-HW_CRYPTO_CMD="vendor_crypto_test"
-
-# SHA Log Pattern
-SHA_LOG_PATTERN="sha"
 
 ###############################################################################
-# Crypto RNG Configuration
+# I2C SCAN OPTIONS
+###############################################################################
+#
+# Run i2cdetect on every detected I2C bus.
+#
 ###############################################################################
 
-# Hardware RNG Device
-HWRNG_DEVICE="/dev/hwrng"
+I2C_SCAN_ALL_BUSES=1
 
-# Random Output File
-RNG_OUTPUT_FILE="random.bin"
-
-# Random Data Size (KB)
-RNG_DATA_SIZE_KB=100
-
-# Minimum Expected Entropy
-MIN_ENTROPY=128
 
 ###############################################################################
-# Crypto LUKS Configuration
+# END OF I2C VALIDATION CONFIGURATION
 ###############################################################################
 
-# Test Image
-CRYPT_IMAGE="crypt.img"
 
-# Image Size (MB)
-CRYPT_IMAGE_SIZE=100
 
-# Mapper Name
-CRYPT_MAPPER="cryptdev"
 
-# Mount Point
-CRYPT_MOUNT="/mnt/crypt_test"
 
-# Password
-CRYPT_PASSWORD="password"
 
-# Test File
-CRYPT_TEST_FILE="test.txt"
 
-# Test String
-CRYPT_TEST_STRING="Embedded Linux Crypto Validation"
 
-# Filesystem
-CRYPT_FS="ext4"
 
-###############################################################################
-# Crypto Stress Configuration
-###############################################################################
 
-# Stress Duration (Seconds)
-CRYPTO_STRESS_DURATION=86400
 
-# AES Algorithm
-CRYPTO_STRESS_ALGORITHM="aes-256-cbc"
 
-# Thermal Zone
-CRYPTO_THERMAL_ZONE="/sys/class/thermal/thermal_zone0/temp"
 
-# Temperature Log Interval (Seconds)
-CRYPTO_TEMP_INTERVAL=60
 
-# Enable SHA Benchmark Along With AES
-ENABLE_SHA_STRESS=1
 
-# SHA Algorithm
-CRYPTO_SHA_ALGORITHM="sha256"
 
-# Log Directory
-CRYPTO_LOG_DIR="logs"
+
+
+
+
+
+
+
+
+
+
+
+
+

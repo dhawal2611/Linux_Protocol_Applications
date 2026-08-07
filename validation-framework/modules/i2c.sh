@@ -15,6 +15,233 @@ MODULE_DESCRIPTION="I2C Peripheral Validation"
 # I2C Runtime Variables
 ###############################################################################
 
+I2C_BUSES=""
+
+###############################################################################
+# Required Commands
+###############################################################################
+
+REQUIRED_COMMANDS=(
+    i2cdetect
+    awk
+    sort
+    grep
+    tr
+)
+
+###############################################################################
+# I2C Bus Discovery
+###############################################################################
+
+i2c_get_buses()
+{
+    i2cdetect -l 2>/dev/null |
+    while read -r BUS REST
+    do
+        case "$BUS" in
+            i2c-*)
+                echo "$BUS" |
+                    sed 's/^i2c-//'
+                ;;
+        esac
+    done |
+    sort -n -u
+}
+
+###############################################################################
+# I2C Slave Address Scanner
+###############################################################################
+
+i2c_scan_bus()
+{
+    local BUS="$1"
+
+    if [ -z "$BUS" ]
+    then
+        echo "ERROR: I2C bus number is empty."
+        return 1
+    fi
+
+    echo "I2C BUS : $BUS"
+    echo "----------------------------------------"
+
+    i2cdetect -y "$BUS"
+
+    return $?
+}
+
+###############################################################################
+# I2C-001 Command Helper
+###############################################################################
+
+i2c_cmd_scan_all_buses()
+{
+    local BUSES
+    local BUS
+    local STATUS=0
+
+    echo "Detecting available I2C buses..."
+
+    BUSES=$(i2c_get_buses)
+
+    if [ -z "$BUSES" ]
+    then
+        echo "ERROR: No I2C buses detected."
+        return 1
+    fi
+
+    echo ""
+    echo "Available I2C buses:"
+    echo "$BUSES"
+    echo ""
+
+    for BUS in $BUSES
+    do
+        echo "==========================================================="
+        echo "Scanning I2C Bus : $BUS"
+        echo "==========================================================="
+
+        if ! i2c_scan_bus "$BUS"
+        then
+            echo "ERROR: Failed to scan I2C bus $BUS."
+            STATUS=1
+        fi
+
+        echo ""
+    done
+
+    return "$STATUS"
+}
+
+###############################################################################
+# I2C-001 : Detect & Scan All I2C Buses
+###############################################################################
+
+i2c_001()
+{
+    local BUSES
+
+    log_info "[I2C-001] Detect & Scan All I2C Buses"
+
+    run_command \
+        "I2C-001" \
+        "Detect & Scan All I2C Buses" \
+        "i2c_cmd_scan_all_buses"
+
+    if [ "$COMMAND_STATUS" -ne 0 ]
+    then
+        TEST_MESSAGE="Unable to detect or scan available I2C buses."
+        test_fail
+        return
+    fi
+
+    BUSES=$(i2c_get_buses)
+
+    if [ -z "$BUSES" ]
+    then
+        TEST_MESSAGE="No I2C buses detected."
+        test_fail
+        return
+    fi
+
+    TEST_MESSAGE="I2C buses detected and scanned successfully: $(echo "$BUSES" | tr '\n' ' ')"
+
+    test_pass
+}
+
+###############################################################################
+# Register I2C Tests
+###############################################################################
+
+i2c_register_tests()
+{
+    register_test \
+        -i "I2C-001" \
+        -f i2c_001 \
+        -n "Detect & Scan All I2C Buses" \
+        -c "peripheral" \
+        -t "auto" \
+        -p "high" \
+        -o 10 \
+        -g "i2c,i2cdetect,bus,scan" \
+        -w "Embedded Team" \
+        -b "Linux" \
+        -e "yes" \
+        -d "Detect all available Linux I2C adapters and scan each bus for connected slave addresses."
+}
+
+###############################################################################
+# Module Initialization
+###############################################################################
+
+i2c_init()
+{
+    log_info "========================================="
+    log_info "Starting I2C Validation"
+    log_info "========================================="
+
+    if ! command -v i2cdetect >/dev/null 2>&1
+    then
+        TEST_MESSAGE="i2cdetect utility is not installed."
+        log_error "$TEST_MESSAGE"
+        return 1
+    fi
+
+    I2C_BUSES=$(i2c_get_buses)
+
+    if [ -z "$I2C_BUSES" ]
+    then
+        TEST_MESSAGE="No Linux I2C buses detected."
+        log_error "$TEST_MESSAGE"
+        return 1
+    fi
+
+    log_info "Detected I2C buses:"
+    echo "$I2C_BUSES"
+
+    i2c_register_tests
+
+    return 0
+}
+
+###############################################################################
+# Module Initialization When Sourced
+###############################################################################
+
+i2c_init
+
+###############################################################################
+# End Of File
+###############################################################################
+
+
+```
+#i2c_get_buses()                                                                                                                                   
+#{                                                                                                                                                 
+#    i2cdetect -l 2>/dev/null |                                                                                                                    
+#    sed -n 's/^i2c-\([0-9][0-9]*\).*/\1/p' |                                                                                                      
+#    sort -n -u                                                                                                                                    
+#}
+
+
+
+#!/bin/bash
+###############################################################################
+# File        : i2c.sh
+# Description : I2C Peripheral Validation Module
+###############################################################################
+
+###############################################################################
+# Module Information
+###############################################################################
+
+MODULE_NAME="I2C"
+MODULE_DESCRIPTION="I2C Peripheral Validation"
+
+###############################################################################
+# I2C Runtime Variables
+###############################################################################
+
 I2C_BUS=""
 I2C_ADDRESS=""
 I2C_REGISTER=""
@@ -63,13 +290,21 @@ REQUIRED_COMMANDS=(
 
 i2c_get_buses()
 {
+    local LINE
+    local BUS
+
     i2cdetect -l 2>/dev/null |
-        awk '/i2c-[0-9]+/ {
-            match($1, /i2c-([0-9]+)/, a)
-            if (a[1] != "")
-                print a[1]
-        }' |
-        sort -n -u
+    while IFS= read -r LINE
+    do
+        BUS=$(printf '%s\n' "$LINE" |
+            sed -n 's/^[[:space:]]*\(i2c-[0-9][0-9]*\)[[:space:]].*/\1/p')
+
+        if [ -n "$BUS" ]
+        then
+            printf '%s\n' "${BUS#i2c-}"
+        fi
+    done |
+    sort -n -u
 }
 
 ###############################################################################
@@ -1331,3 +1566,4 @@ i2c_init
 ###############################################################################
 # End Of File
 ###############################################################################
+```
