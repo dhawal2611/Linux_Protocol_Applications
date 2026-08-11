@@ -80,6 +80,7 @@ SUPPORTED_CATEGORIES=(
     system
     diagnostic
     hardware
+    peripheral
 )
 
 SUPPORTED_ENABLED_VALUES=(

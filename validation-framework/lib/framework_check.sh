@@ -59,7 +59,7 @@ REQUIRED_COMMANDS=(
     realpath
     sed
     sort
-    timeout
+    #timeout
     touch
     tr
     uniq

@@ -265,6 +265,7 @@ Test Summary
 --------------------------------------------------------------------------------
 
 Result          : PASS
+Reason          : ${TEST_MESSAGE}
 Exit Status     : $COMMAND_STATUS
 Execution Time  : ${COMMAND_EXEC_TIME} sec
 End Time        : $COMMAND_END_TIME
@@ -302,6 +303,7 @@ Test Summary
 --------------------------------------------------------------------------------
 
 Result          : FAIL
+Reason          : ${TEST_MESSAGE}
 Exit Status     : $COMMAND_STATUS
 Execution Time  : ${COMMAND_EXEC_TIME} sec
 End Time        : $COMMAND_END_TIME

@@ -12,10 +12,15 @@ MODULE_NAME="I2C"
 MODULE_DESCRIPTION="I2C Peripheral Validation"
 
 ###############################################################################
-# I2C Runtime Variables
+# Module Paths
 ###############################################################################
 
-I2C_BUSES=""
+I2C_MODULE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+I2C_RUNTIME_DIR="${I2C_MODULE_DIR}/../runtime/i2c"
+
+I2C_BUSES_FILE="${I2C_RUNTIME_DIR}/buses"
+I2C_DISCOVERY_FILE="${I2C_RUNTIME_DIR}/discovery"
+I2C_STATUS_FILE="${I2C_RUNTIME_DIR}/status"
 
 ###############################################################################
 # Required Commands
@@ -23,14 +28,93 @@ I2C_BUSES=""
 
 REQUIRED_COMMANDS=(
     i2cdetect
+    i2ctransfer
+    i2cget
+    i2cset
     awk
-    sort
     grep
+    sort
     tr
 )
 
 ###############################################################################
-# I2C Bus Discovery
+# Configuration Defaults
+###############################################################################
+
+#
+# Generic I2C device
+#
+I2C_GENERIC_BUS="${I2C_GENERIC_BUS:-1}"
+I2C_GENERIC_ADDRESS="${I2C_GENERIC_ADDRESS:-0x38}"
+
+#
+# Generic read/write configuration
+#
+I2C_GENERIC_WRITE_REGISTER="${I2C_GENERIC_WRITE_REGISTER:-0x00}"
+I2C_GENERIC_WRITE_VALUE="${I2C_GENERIC_WRITE_VALUE:-0x12}"
+I2C_GENERIC_READ_REGISTER="${I2C_GENERIC_READ_REGISTER:-0x00}"
+
+#
+# Configured generic devices.
+#
+# Format:
+#
+#   BUS:ADDRESS
+#
+# Example:
+#
+#   I2C_GENERIC_DEVICES=(
+#       "1:0x38"
+#       "1:0x60"
+#   )
+#
+
+if [ -z "${I2C_GENERIC_DEVICES+x}" ]
+then
+    I2C_GENERIC_DEVICES=(
+        "1:0x38"
+    )
+fi
+
+###############################################################################
+# Runtime Directory
+###############################################################################
+
+i2c_runtime_init()
+{
+    mkdir -p "$I2C_RUNTIME_DIR"
+
+    #
+    # Do not delete the files here if another test case already performed
+    # discovery in the same validation execution.
+    #
+    if [ ! -f "$I2C_STATUS_FILE" ]
+    then
+        echo "DISCOVERY_DONE=0" > "$I2C_STATUS_FILE"
+    fi
+}
+
+###############################################################################
+# Runtime Cleanup
+###############################################################################
+
+i2c_runtime_cleanup()
+{
+    #
+    # Runtime files can be removed after the complete validation run.
+    #
+    # This function is intentionally available but is not called between
+    # individual test cases.
+    #
+
+    if [ -d "$I2C_RUNTIME_DIR" ]
+    then
+        rm -rf "$I2C_RUNTIME_DIR"
+    fi
+}
+
+###############################################################################
+# Get I2C Buses
 ###############################################################################
 
 i2c_get_buses()
@@ -39,9 +123,8 @@ i2c_get_buses()
     while read -r BUS REST
     do
         case "$BUS" in
-            i2c-*)
-                echo "$BUS" |
-                    sed 's/^i2c-//'
+            i2c-[0-9]*)
+                echo "${BUS#i2c-}"
                 ;;
         esac
     done |
@@ -49,66 +132,324 @@ i2c_get_buses()
 }
 
 ###############################################################################
-# I2C Slave Address Scanner
+# Convert Address To Decimal
 ###############################################################################
 
-i2c_scan_bus()
+i2c_address_to_decimal()
 {
-    local BUS="$1"
+    local ADDRESS="$1"
 
-    if [ -z "$BUS" ]
-    then
-        echo "ERROR: I2C bus number is empty."
-        return 1
-    fi
-
-    echo "I2C BUS : $BUS"
-    echo "----------------------------------------"
-
-    i2cdetect -y "$BUS"
-
-    return $?
+    printf "%d\n" "$((ADDRESS))" 2>/dev/null
 }
 
 ###############################################################################
-# I2C-001 Command Helper
+# Normalize I2C Address
 ###############################################################################
 
-i2c_cmd_scan_all_buses()
+i2c_normalize_address()
 {
-    local BUSES
-    local BUS
-    local STATUS=0
+    local ADDRESS="$1"
+    local DECIMAL_ADDRESS
 
-    echo "Detecting available I2C buses..."
+    DECIMAL_ADDRESS=$(i2c_address_to_decimal "$ADDRESS")
 
-    BUSES=$(i2c_get_buses)
-
-    if [ -z "$BUSES" ]
+    if [ -z "$DECIMAL_ADDRESS" ]
     then
-        echo "ERROR: No I2C buses detected."
         return 1
     fi
 
-    echo ""
-    echo "Available I2C buses:"
-    echo "$BUSES"
-    echo ""
+    printf "%02x\n" "$DECIMAL_ADDRESS"
+}
 
-    for BUS in $BUSES
+###############################################################################
+# Store Detected Devices
+###############################################################################
+
+i2c_store_bus_devices()
+{
+    local SCAN_OUTPUT="$1"
+    local TOKEN
+    local ADDRESS
+
+    echo "$SCAN_OUTPUT" |
+    while read -r LINE
     do
-        echo "==========================================================="
-        echo "Scanning I2C Bus : $BUS"
-        echo "==========================================================="
+        for TOKEN in $LINE
+        do
+            case "$TOKEN" in
 
-        if ! i2c_scan_bus "$BUS"
+                --)
+                    ;;
+
+                UU)
+                    ;;
+
+                [0-9a-fA-F][0-9a-fA-F])
+
+                    ADDRESS=$(echo "$TOKEN" |
+                        tr '[:upper:]' '[:lower:]')
+
+                    #
+                    # Ignore i2cdetect row headers.
+                    #
+                    case "$ADDRESS" in
+                        00|10|20|30|40|50|60|70)
+                            ;;
+
+                        *)
+                            echo "$ADDRESS"
+                            ;;
+                    esac
+                    ;;
+
+            esac
+        done
+    done |
+    sort -u |
+    tr '\n' ' ' |
+    sed 's/[[:space:]]*$//'
+}
+
+
+###############################################################################
+# Save Bus Device Information
+###############################################################################
+
+i2c_save_bus_devices()
+{
+    local BUS="$1"
+    local DEVICES="$2"
+
+    mkdir -p "$I2C_RUNTIME_DIR"
+
+    #
+    # Format:
+    #
+    # BUS=1 DEVICES="38 60"
+    #
+    echo "BUS=${BUS} DEVICES=\"${DEVICES}\"" >> "$I2C_DISCOVERY_FILE"
+}
+
+###############################################################################
+# Load Devices For A Bus
+###############################################################################
+
+i2c_get_detected_devices()
+{
+    local BUS="$1"
+
+    if [ ! -f "$I2C_DISCOVERY_FILE" ]
+    then
+        return 1
+    fi
+
+    awk -v bus="$BUS" '
+        $0 ~ "^BUS=" bus " " {
+            line=$0
+            sub(/^BUS=[0-9]+ DEVICES="/, "", line)
+            sub(/"$/, "", line)
+            print line
+            exit
+        }
+    ' "$I2C_DISCOVERY_FILE"
+}
+
+###############################################################################
+# Check Whether Device Was Detected
+###############################################################################
+
+i2c_device_detected()
+{
+    local BUS="$1"
+    local ADDRESS="$2"
+    local NORMALIZED_ADDRESS
+    local DETECTED_DEVICES
+    local DEVICE
+
+    NORMALIZED_ADDRESS=$(i2c_normalize_address "$ADDRESS")
+
+    if [ -z "$NORMALIZED_ADDRESS" ]
+    then
+        return 1
+    fi
+
+    DETECTED_DEVICES=$(i2c_get_detected_devices "$BUS")
+
+    if [ -z "$DETECTED_DEVICES" ]
+    then
+        return 1
+    fi
+
+    for DEVICE in $DETECTED_DEVICES
+    do
+        DEVICE=$(echo "$DEVICE" |
+            tr '[:upper:]' '[:lower:]')
+
+        if [ "$DEVICE" = "$NORMALIZED_ADDRESS" ]
+        then
+            return 0
+        fi
+    done
+
+    return 1
+}
+
+
+###############################################################################
+# Verify Discovery
+###############################################################################
+
+i2c_discovery_done()
+{
+    if [ ! -f "$I2C_STATUS_FILE" ]
+    then
+        return 1
+    fi
+
+    grep -q '^DISCOVERY_DONE=1$' "$I2C_STATUS_FILE"
+}
+
+###############################################################################
+# Verify Expected Device
+###############################################################################
+
+i2c_verify_expected_device()
+{
+    local BUS="$1"
+    local ADDRESS="$2"
+    local DEVICE_NAME="$3"
+
+    if ! i2c_discovery_done
+    then
+        echo "ERROR: I2C discovery has not been completed."
+        echo "Please execute I2C-001 before running device tests."
+        return 1
+    fi
+
+    if ! i2c_device_detected "$BUS" "$ADDRESS"
+    then
+        echo "ERROR: $DEVICE_NAME not detected."
+        echo
+        echo "Expected:"
+        echo "  Bus     : $BUS"
+        echo "  Address : $ADDRESS"
+        echo
+
+        echo "Detected devices on bus $BUS:"
+        i2c_get_detected_devices "$BUS"
+
+        return 1
+    fi
+
+    echo "$DEVICE_NAME detected successfully."
+    echo "  Bus     : $BUS"
+    echo "  Address : $ADDRESS"
+
+    return 0
+}
+
+###############################################################################
+# I2C-001
+# Detect & Scan All I2C Buses
+###############################################################################
+
+
+i2c_cmd_scan_all_buses()
+{
+    local BUS
+    local SCAN_OUTPUT
+    local DEVICES
+    local STATUS=0
+
+    i2c_runtime_init
+
+    #
+    # Avoid duplicate discovery.
+    #
+    if i2c_discovery_done
+    then
+        echo "I2C discovery already completed."
+        echo
+        echo "Previously detected I2C buses:"
+        cat "$I2C_BUSES_FILE"
+
+        return 0
+    fi
+
+    #
+    # Start fresh discovery file.
+    #
+    : > "$I2C_DISCOVERY_FILE"
+
+    echo "Detecting available I2C buses..."
+    echo
+
+    I2C_BUSES=$(i2c_get_buses)
+
+    if [ -z "$I2C_BUSES" ]
+    then
+        echo "ERROR: No I2C buses detected."
+
+        echo "DISCOVERY_DONE=0" > "$I2C_STATUS_FILE"
+
+        return 1
+    fi
+
+    #
+    # Store bus list.
+    #
+    echo "$I2C_BUSES" > "$I2C_BUSES_FILE"
+
+    echo "Available I2C buses:"
+    echo "$I2C_BUSES"
+    echo
+
+    #
+    # Scan every detected bus.
+    #
+    for BUS in $I2C_BUSES
+    do
+        echo "## I2C BUS : $BUS"
+        echo
+
+        SCAN_OUTPUT=$(i2cdetect -y "$BUS" 2>&1)
+        COMMAND_RC=$?
+
+        echo "$SCAN_OUTPUT"
+        echo
+
+        if [ "$COMMAND_RC" -ne 0 ]
         then
             echo "ERROR: Failed to scan I2C bus $BUS."
             STATUS=1
+            continue
         fi
 
-        echo ""
+        DEVICES=$(i2c_store_bus_devices "$SCAN_OUTPUT")
+
+        i2c_save_bus_devices "$BUS" "$DEVICES"
+
+        echo "Detected slave addresses on bus $BUS:"
+
+        if [ -n "$DEVICES" ]
+        then
+            echo "$DEVICES"
+        else
+            echo "None"
+        fi
+
+        echo
     done
+
+    #
+    # Only mark discovery complete if every bus scan succeeded.
+    #
+    if [ "$STATUS" -eq 0 ]
+    then
+        echo "DISCOVERY_DONE=1" > "$I2C_STATUS_FILE"
+    else
+        echo "DISCOVERY_DONE=0" > "$I2C_STATUS_FILE"
+    fi
 
     return "$STATUS"
 }
@@ -119,8 +460,6 @@ i2c_cmd_scan_all_buses()
 
 i2c_001()
 {
-    local BUSES
-
     log_info "[I2C-001] Detect & Scan All I2C Buses"
 
     run_command \
@@ -130,21 +469,632 @@ i2c_001()
 
     if [ "$COMMAND_STATUS" -ne 0 ]
     then
-        TEST_MESSAGE="Unable to detect or scan available I2C buses."
+        TEST_MESSAGE="I2C bus detection or scanning failed."
         test_fail
         return
     fi
 
-    BUSES=$(i2c_get_buses)
+    TEST_MESSAGE="Detected and scanned all I2C buses successfully."
 
-    if [ -z "$BUSES" ]
+    test_pass
+}
+
+
+###############################################################################
+# I2C-002
+# Verify TMP1075 @ 0x48
+###############################################################################
+
+i2c_002()
+{
+    log_info "[I2C-002] Verify TMP1075 Temperature Sensor @ 0x48"
+
+    if ! i2c_verify_expected_device \
+        "0" \
+        "0x48" \
+        "TMP1075 Temperature Sensor"
     then
-        TEST_MESSAGE="No I2C buses detected."
+        TEST_MESSAGE="TMP1075 at bus 0 address 0x48 was not detected."
         test_fail
         return
     fi
 
-    TEST_MESSAGE="I2C buses detected and scanned successfully: $(echo "$BUSES" | tr '\n' ' ')"
+    run_command \
+        "I2C-002" \
+        "Read TMP1075 Temperature Sensor @ 0x48" \
+        "i2ctransfer -y 0 w1@0x48 0x00 r2"
+
+    if [ "$COMMAND_STATUS" -ne 0 ]
+    then
+        TEST_MESSAGE="TMP1075 transaction failed at bus 0 address 0x48."
+        test_fail
+        return
+    fi
+
+    if [ -z "$COMMAND_OUTPUT" ]
+    then
+        TEST_MESSAGE="TMP1075 returned empty output."
+        test_fail
+        return
+    fi
+
+    TEST_MESSAGE="TMP1075 @ 0x48 transaction completed successfully."
+
+    test_pass
+}
+
+###############################################################################
+# I2C-003
+# Verify TMP1075 @ 0x49
+###############################################################################
+
+i2c_003()
+{
+    log_info "[I2C-003] Verify TMP1075 Temperature Sensor @ 0x49"
+
+    if ! i2c_verify_expected_device \
+        "0" \
+        "0x49" \
+        "TMP1075 Temperature Sensor"
+    then
+        TEST_MESSAGE="TMP1075 at bus 0 address 0x49 was not detected."
+        test_fail
+        return
+    fi
+
+    run_command \
+        "I2C-003" \
+        "Read TMP1075 Temperature Sensor @ 0x49" \
+        "i2ctransfer -y 0 w1@0x49 0x00 r2"
+
+    if [ "$COMMAND_STATUS" -ne 0 ]
+    then
+        TEST_MESSAGE="TMP1075 transaction failed at bus 0 address 0x49."
+        test_fail
+        return
+    fi
+
+    if [ -z "$COMMAND_OUTPUT" ]
+    then
+        TEST_MESSAGE="TMP1075 returned empty output."
+        test_fail
+        return
+    fi
+
+    TEST_MESSAGE="TMP1075 @ 0x49 transaction completed successfully."
+
+    test_pass
+}
+
+###############################################################################
+# I2C-004
+# Verify EEPROM @ 0x50
+###############################################################################
+
+i2c_004()
+{
+    log_info "[I2C-004] Verify EEPROM @ 0x50"
+
+    if ! i2c_verify_expected_device \
+        "0" \
+        "0x50" \
+        "EEPROM 24LC64"
+    then
+        TEST_MESSAGE="EEPROM at bus 0 address 0x50 was not detected."
+        test_fail
+        return
+    fi
+
+    run_command \
+        "I2C-004" \
+        "Read EEPROM @ 0x50" \
+        "i2ctransfer -y 0 w2@0x50 0x00 0x10 r1"
+
+    if [ "$COMMAND_STATUS" -ne 0 ]
+    then
+        TEST_MESSAGE="EEPROM transaction failed at bus 0 address 0x50."
+        test_fail
+        return
+    fi
+
+    if [ -z "$COMMAND_OUTPUT" ]
+    then
+        TEST_MESSAGE="EEPROM returned empty output."
+        test_fail
+        return
+    fi
+
+    TEST_MESSAGE="EEPROM @ 0x50 transaction completed successfully."
+
+    test_pass
+}
+
+###############################################################################
+# I2C-005
+# Verify PAC1931 @ 0x1F
+###############################################################################
+
+i2c_005()
+{
+    log_info "[I2C-005] Verify PAC1931 Current Sensor @ 0x1F"
+
+    if ! i2c_verify_expected_device \
+        "0" \
+        "0x1F" \
+        "PAC1931 Current Sensor"
+    then
+        TEST_MESSAGE="PAC1931 at bus 0 address 0x1F was not detected."
+        test_fail
+        return
+    fi
+
+    run_command \
+        "I2C-005" \
+        "Read PAC1931 @ 0x1F" \
+        "i2ctransfer -y 0 w1@0x1F 0x0B r2"
+
+    if [ "$COMMAND_STATUS" -ne 0 ]
+    then
+        TEST_MESSAGE="PAC1931 transaction failed at bus 0 address 0x1F."
+        test_fail
+        return
+    fi
+
+    if [ -z "$COMMAND_OUTPUT" ]
+    then
+        TEST_MESSAGE="PAC1931 returned empty output."
+        test_fail
+        return
+    fi
+
+    TEST_MESSAGE="PAC1931 @ 0x1F transaction completed successfully."
+
+    test_pass
+}
+
+###############################################################################
+# I2C-006
+# Verify ATECC608B @ 0x60
+###############################################################################
+
+i2c_cmd_atecc608b()
+{
+    i2ctransfer \
+        -y 1 \
+        w8@0x60 \
+        0x03 0x07 0x1B 0x00 0x00 0x00 0x03 0xA7
+
+    if [ $? -ne 0 ]
+    then
+        return 1
+    fi
+
+    sleep 0.003
+
+    i2ctransfer \
+        -y 1 \
+        r35@0x60
+}
+
+i2c_006()
+{
+    log_info "[I2C-006] Verify ATECC608B Authentication IC @ 0x60"
+
+    if ! i2c_verify_expected_device \
+        "1" \
+        "0x60" \
+        "ATECC608B Authentication IC"
+    then
+        TEST_MESSAGE="ATECC608B at bus 1 address 0x60 was not detected."
+        test_fail
+        return
+    fi
+
+    run_command \
+        "I2C-006" \
+        "Read ATECC608B @ 0x60" \
+        "i2c_cmd_atecc608b"
+
+    if [ "$COMMAND_STATUS" -ne 0 ]
+    then
+        TEST_MESSAGE="ATECC608B transaction failed."
+        test_fail
+        return
+    fi
+
+    if [ -z "$COMMAND_OUTPUT" ]
+    then
+        TEST_MESSAGE="ATECC608B returned empty output."
+        test_fail
+        return
+    fi
+
+    TEST_MESSAGE="ATECC608B @ 0x60 transaction completed successfully."
+
+    test_pass
+}
+
+###############################################################################
+# I2C-007
+# Verify Generic I2C Slave Address
+###############################################################################
+
+i2c_007()
+{
+    log_info "[I2C-007] Verify Generic I2C Slave Address"
+
+    if ! i2c_verify_expected_device \
+        "$I2C_GENERIC_BUS" \
+        "$I2C_GENERIC_ADDRESS" \
+        "Generic I2C Device"
+    then
+        TEST_MESSAGE="Generic I2C device $I2C_GENERIC_ADDRESS was not detected on bus $I2C_GENERIC_BUS."
+        test_fail
+        return
+    fi
+
+    TEST_MESSAGE="Generic I2C slave $I2C_GENERIC_ADDRESS detected on bus $I2C_GENERIC_BUS."
+
+    test_pass
+}
+
+###############################################################################
+# I2C-008
+# Generic I2C Read
+###############################################################################
+
+i2c_008()
+{
+    log_info "[I2C-008] Verify Generic I2C Read"
+
+    if ! i2c_verify_expected_device \
+        "$I2C_GENERIC_BUS" \
+        "$I2C_GENERIC_ADDRESS" \
+        "Generic I2C Device"
+    then
+        TEST_MESSAGE="Generic I2C device was not detected."
+        test_fail
+        return
+    fi
+
+    run_command \
+        "I2C-008" \
+        "Generic I2C Read" \
+        "i2cget -y $I2C_GENERIC_BUS $I2C_GENERIC_ADDRESS $I2C_GENERIC_READ_REGISTER"
+
+    if [ "$COMMAND_STATUS" -ne 0 ]
+    then
+        TEST_MESSAGE="Generic I2C read failed."
+        test_fail
+        return
+    fi
+
+    if [ -z "$COMMAND_OUTPUT" ]
+    then
+        TEST_MESSAGE="Generic I2C read returned empty output."
+        test_fail
+        return
+    fi
+
+    TEST_MESSAGE="Generic I2C read completed successfully."
+
+    test_pass
+}
+
+###############################################################################
+# I2C-009
+# Generic I2C Write
+###############################################################################
+
+i2c_009()
+{
+    log_info "[I2C-009] Verify Generic I2C Write"
+
+    if ! i2c_verify_expected_device \
+        "$I2C_GENERIC_BUS" \
+        "$I2C_GENERIC_ADDRESS" \
+        "Generic I2C Device"
+    then
+        TEST_MESSAGE="Generic I2C device was not detected."
+        test_fail
+        return
+    fi
+
+    run_command \
+        "I2C-009" \
+        "Generic I2C Write" \
+        "i2cset -y $I2C_GENERIC_BUS $I2C_GENERIC_ADDRESS $I2C_GENERIC_WRITE_REGISTER $I2C_GENERIC_WRITE_VALUE"
+
+    if [ "$COMMAND_STATUS" -ne 0 ]
+    then
+        TEST_MESSAGE="Generic I2C write failed."
+        test_fail
+        return
+    fi
+
+    TEST_MESSAGE="Generic I2C write completed successfully."
+
+    test_pass
+}
+
+
+###############################################################################
+# I2C-010
+# Generic Write + Readback
+###############################################################################
+
+i2c_cmd_generic_write_readback()
+{
+    local READ_VALUE
+
+    echo "Generic I2C write + readback"
+    echo
+    echo "Bus            : $I2C_GENERIC_BUS"
+    echo "Address        : $I2C_GENERIC_ADDRESS"
+    echo "Write Register : $I2C_GENERIC_WRITE_REGISTER"
+    echo "Write Value    : $I2C_GENERIC_WRITE_VALUE"
+    echo "Read Register  : $I2C_GENERIC_READ_REGISTER"
+    echo
+
+    echo "Writing $I2C_GENERIC_WRITE_VALUE..."
+
+    i2cset \
+        -y "$I2C_GENERIC_BUS" \
+        "$I2C_GENERIC_ADDRESS" \
+        "$I2C_GENERIC_WRITE_REGISTER" \
+        "$I2C_GENERIC_WRITE_VALUE"
+
+    if [ $? -ne 0 ]
+    then
+        echo "ERROR: I2C write failed."
+        return 1
+    fi
+
+    echo "Write successful."
+    echo
+
+    echo "Reading back..."
+
+    READ_VALUE=$(i2cget \
+        -y "$I2C_GENERIC_BUS" \
+        "$I2C_GENERIC_ADDRESS" \
+        "$I2C_GENERIC_READ_REGISTER" 2>&1)
+
+    if [ $? -ne 0 ]
+    then
+        echo "$READ_VALUE"
+        echo "ERROR: I2C readback failed."
+        return 1
+    fi
+
+    echo "Read Value : $READ_VALUE"
+    echo
+
+    READ_VALUE=$(echo "$READ_VALUE" |
+        tr '[:upper:]' '[:lower:]')
+
+    EXPECTED_VALUE=$(echo "$I2C_GENERIC_WRITE_VALUE" |
+        tr '[:upper:]' '[:lower:]')
+
+    if [ "$READ_VALUE" != "$EXPECTED_VALUE" ]
+    then
+        echo "ERROR: Write/readback mismatch."
+        echo "Expected : $EXPECTED_VALUE"
+        echo "Read     : $READ_VALUE"
+        return 1
+    fi
+
+    echo "Write/readback verification successful."
+
+    return 0
+}
+
+i2c_010()
+{
+    log_info "[I2C-010] Verify Generic I2C Write + Readback"
+
+    if ! i2c_verify_expected_device \
+        "$I2C_GENERIC_BUS" \
+        "$I2C_GENERIC_ADDRESS" \
+        "Generic I2C Device"
+    then
+        TEST_MESSAGE="Generic I2C device was not detected."
+        test_fail
+        return
+    fi
+
+    run_command \
+        "I2C-010" \
+        "Generic I2C Write + Readback" \
+        "i2c_cmd_generic_write_readback"
+
+    if [ "$COMMAND_STATUS" -ne 0 ]
+    then
+        TEST_MESSAGE="Generic I2C write/readback verification failed."
+        test_fail
+        return
+    fi
+
+    if [ -z "$COMMAND_OUTPUT" ]
+    then
+        TEST_MESSAGE="Generic I2C write/readback returned empty output."
+        test_fail
+        return
+    fi
+
+    TEST_MESSAGE="Generic I2C write/readback verification completed successfully."
+
+    test_pass
+}
+
+
+###############################################################################
+# I2C-011
+# Validate Configured Generic Devices
+###############################################################################
+
+i2c_parse_generic_device()
+{
+    local DEVICE="$1"
+
+    I2C_GENERIC_DEVICE_BUS="${DEVICE%%:*}"
+    I2C_GENERIC_DEVICE_ADDRESS="${DEVICE##*:}"
+}
+
+i2c_cmd_validate_configured_devices()
+{
+    local DEVICE
+    local BUS
+    local ADDRESS
+    local STATUS=0
+
+    if [ "${#I2C_GENERIC_DEVICES[@]}" -eq 0 ]
+    then
+        echo "No generic I2C devices configured."
+        return 0
+    fi
+
+    echo "Configured Generic I2C Devices:"
+    echo
+
+    for DEVICE in "${I2C_GENERIC_DEVICES[@]}"
+    do
+        i2c_parse_generic_device "$DEVICE"
+
+        BUS="$I2C_GENERIC_DEVICE_BUS"
+        ADDRESS="$I2C_GENERIC_DEVICE_ADDRESS"
+
+        echo "Device:"
+        echo "  Bus     : $BUS"
+        echo "  Address : $ADDRESS"
+
+        if i2c_device_detected "$BUS" "$ADDRESS"
+        then
+            echo "  Status  : DETECTED"
+        else
+            echo "  Status  : NOT DETECTED"
+            STATUS=1
+        fi
+
+        echo
+    done
+
+    return "$STATUS"
+}
+
+i2c_011()
+{
+    log_info "[I2C-011] Validate Configured Generic I2C Devices"
+
+    run_command \
+        "I2C-011" \
+        "Validate Configured Generic I2C Devices" \
+        "i2c_cmd_validate_configured_devices"
+
+    if [ "$COMMAND_STATUS" -ne 0 ]
+    then
+        TEST_MESSAGE="One or more configured generic I2C devices were not detected."
+        test_fail
+        return
+    fi
+
+    TEST_MESSAGE="All configured generic I2C devices were detected successfully."
+
+    test_pass
+}
+
+###############################################################################
+# I2C-012
+# Report Detected But Unconfigured Devices
+###############################################################################
+
+i2c_cmd_report_unconfigured_devices()
+{
+    local BUS
+    local DETECTED_DEVICES
+    local DEVICE
+    local CONFIG_DEVICE
+    local CONFIGURED
+    local DETECTED_ADDRESS
+    local CONFIG_ADDRESS
+    local FOUND_UNCONFIGURED=0
+
+    echo "Checking detected I2C devices against configuration..."
+    echo
+
+    for BUS in $I2C_BUSES
+    do
+        DETECTED_DEVICES=$(i2c_get_detected_devices "$BUS")
+
+        for DEVICE in $DETECTED_DEVICES
+        do
+            DETECTED_ADDRESS="0x$DEVICE"
+            CONFIGURED=0
+
+            for CONFIG_DEVICE in "${I2C_GENERIC_DEVICES[@]}"
+            do
+                i2c_parse_generic_device "$CONFIG_DEVICE"
+
+                if [ "$I2C_GENERIC_DEVICE_BUS" != "$BUS" ]
+                then
+                    continue
+                fi
+
+                CONFIG_ADDRESS=$(i2c_normalize_address \
+                    "$I2C_GENERIC_DEVICE_ADDRESS")
+
+                if [ "$CONFIG_ADDRESS" = "$DEVICE" ]
+                then
+                    CONFIGURED=1
+                    break
+                fi
+            done
+
+            if [ "$CONFIGURED" -eq 0 ]
+            then
+                echo "[WARN] Detected but unconfigured I2C device:"
+                echo "       Bus     : $BUS"
+                echo "       Address : $DETECTED_ADDRESS"
+                echo
+
+                FOUND_UNCONFIGURED=1
+            fi
+        done
+    done
+
+    if [ "$FOUND_UNCONFIGURED" -eq 1 ]
+    then
+        echo "WARNING: One or more detected I2C devices are not configured."
+    else
+        echo "All detected generic I2C devices are configured."
+    fi
+
+    #
+    # I2C-012 is informational.
+    #
+    # Do not fail because an extra device was detected.
+    #
+    return 0
+}
+
+
+i2c_012()
+{
+    log_info "[I2C-012] Report Detected but Unconfigured I2C Devices"
+
+    run_command \
+        "I2C-012" \
+        "Report Detected but Unconfigured I2C Devices" \
+        "i2c_cmd_report_unconfigured_devices"
+
+    if [ "$COMMAND_STATUS" -ne 0 ]
+    then
+        TEST_MESSAGE="Unable to complete detected-device configuration audit."
+        test_fail
+        return
+    fi
+
+    TEST_MESSAGE="I2C detected-device configuration audit completed."
 
     test_pass
 }
@@ -163,1360 +1113,165 @@ i2c_register_tests()
         -t "auto" \
         -p "high" \
         -o 10 \
-        -g "i2c,i2cdetect,bus,scan" \
+        -g "i2c,detect,scan,bus,slave" \
         -w "Embedded Team" \
         -b "Linux" \
         -e "yes" \
-        -d "Detect all available Linux I2C adapters and scan each bus for connected slave addresses."
-}
-
-###############################################################################
-# Module Initialization
-###############################################################################
-
-i2c_init()
-{
-    log_info "========================================="
-    log_info "Starting I2C Validation"
-    log_info "========================================="
-
-    if ! command -v i2cdetect >/dev/null 2>&1
-    then
-        TEST_MESSAGE="i2cdetect utility is not installed."
-        log_error "$TEST_MESSAGE"
-        return 1
-    fi
-
-    I2C_BUSES=$(i2c_get_buses)
-
-    if [ -z "$I2C_BUSES" ]
-    then
-        TEST_MESSAGE="No Linux I2C buses detected."
-        log_error "$TEST_MESSAGE"
-        return 1
-    fi
-
-    log_info "Detected I2C buses:"
-    echo "$I2C_BUSES"
-
-    i2c_register_tests
-
-    return 0
-}
-
-###############################################################################
-# Module Initialization When Sourced
-###############################################################################
-
-i2c_init
-
-###############################################################################
-# End Of File
-###############################################################################
-
-
-```
-#i2c_get_buses()                                                                                                                                   
-#{                                                                                                                                                 
-#    i2cdetect -l 2>/dev/null |                                                                                                                    
-#    sed -n 's/^i2c-\([0-9][0-9]*\).*/\1/p' |                                                                                                      
-#    sort -n -u                                                                                                                                    
-#}
-
-
-
-#!/bin/bash
-###############################################################################
-# File        : i2c.sh
-# Description : I2C Peripheral Validation Module
-###############################################################################
-
-###############################################################################
-# Module Information
-###############################################################################
-
-MODULE_NAME="I2C"
-MODULE_DESCRIPTION="I2C Peripheral Validation"
-
-###############################################################################
-# I2C Runtime Variables
-###############################################################################
-
-I2C_BUS=""
-I2C_ADDRESS=""
-I2C_REGISTER=""
-I2C_READ_LENGTH=""
-I2C_WRITE_DATA=""
-
-###############################################################################
-# Board-Specific I2C Configuration
-###############################################################################
-
-# I2C-0
-I2C0_TMP1075_1_ADDRESS="0x48"
-I2C0_TMP1075_2_ADDRESS="0x49"
-I2C0_EEPROM_ADDRESS="0x50"
-I2C0_PAC1931_ADDRESS="0x1F"
-
-# I2C-1
-I2C1_ATECC608B_ADDRESS="0x60"
-
-###############################################################################
-# Required Commands
-###############################################################################
-
-REQUIRED_COMMANDS=(
-    i2cdetect
-    i2ctransfer
-    i2cdetect
-    ls
-    awk
-    grep
-    sed
-    tr
-    sort
-    uniq
-    printf
-)
-
-###############################################################################
-# Helper Functions
-###############################################################################
-
-###############################################################################
-# I2C-001
-# Detect all available I2C buses
-###############################################################################
-
-i2c_get_buses()
-{
-    local LINE
-    local BUS
-
-    i2cdetect -l 2>/dev/null |
-    while IFS= read -r LINE
-    do
-        BUS=$(printf '%s\n' "$LINE" |
-            sed -n 's/^[[:space:]]*\(i2c-[0-9][0-9]*\)[[:space:]].*/\1/p')
-
-        if [ -n "$BUS" ]
-        then
-            printf '%s\n' "${BUS#i2c-}"
-        fi
-    done |
-    sort -n -u
-}
-
-###############################################################################
-# I2C-001 Command Helper
-###############################################################################
-
-i2c_cmd_detect_buses()
-{
-    local BUSES
-
-    BUSES=$(i2c_get_buses)
-
-    if [ -z "$BUSES" ]
-    then
-        echo "ERROR: No I2C buses detected."
-        return 1
-    fi
-
-    echo "Available I2C buses:"
-    echo "$BUSES"
-
-    echo ""
-    echo "I2C adapter information:"
-    i2cdetect -l
-
-    return 0
-}
-
-###############################################################################
-# I2C-002 Command Helper
-# Verify I2C device nodes
-###############################################################################
-
-i2c_cmd_device_nodes()
-{
-    local DEVICES
-
-    DEVICES=$(ls /dev/i2c-* 2>/dev/null)
-
-    if [ -z "$DEVICES" ]
-    then
-        echo "ERROR: No /dev/i2c-* device nodes found."
-        return 1
-    fi
-
-    echo "Detected I2C device nodes:"
-    echo "$DEVICES"
-
-    return 0
-}
-
-###############################################################################
-# Extract slave addresses from i2cdetect output
-###############################################################################
-
-i2c_print_detected_addresses()
-{
-    local OUTPUT="$1"
-    local ADDRESSES
-
-    ADDRESSES=$(echo "$OUTPUT" |
-        awk '
-        /^[[:space:]]*[0-9a-fA-F][0-9a-fA-F][[:space:]]/ {
-            for (i = 2; i <= NF; i++) {
-                if ($i ~ /^[0-9a-fA-F]{2}$/ &&
-                    $i != "--")
-                {
-                    print "0x" toupper($i)
-                }
-            }
-        }' |
-        sort -u)
-
-    echo ""
-    echo "Detected I2C Slave Addresses:"
-
-    if [ -z "$ADDRESSES" ]
-    then
-        echo "  None"
-        return 0
-    fi
-
-    echo "$ADDRESSES" |
-        while read -r ADDRESS
-        do
-            [ -n "$ADDRESS" ] && echo "  $ADDRESS"
-        done
-
-    echo ""
-    echo "Total Slave Addresses Detected: $(echo "$ADDRESSES" | wc -l)"
-
-    return 0
-}
-
-###############################################################################
-# I2C-003 Command Helper
-# Scan ALL available I2C buses
-###############################################################################
-
-i2c_cmd_scan_all_buses()
-{
-    local BUS
-    local BUSES
-    local OUTPUT
-    local BUS_STATUS=0
-
-    BUSES=$(i2c_get_buses)
-
-    if [ -z "$BUSES" ]
-    then
-        echo "ERROR: No I2C buses available for scanning."
-        return 1
-    fi
-
-    echo "=============================================================="
-    echo "I2C BUS SCAN"
-    echo "=============================================================="
-
-    echo "Available buses:"
-    echo "$BUSES"
-    echo ""
-
-    for BUS in $BUSES
-    do
-        echo "--------------------------------------------------------------"
-        echo "Scanning I2C Bus $BUS"
-        echo "Command: i2cdetect -y $BUS"
-        echo "--------------------------------------------------------------"
-
-        OUTPUT=$(i2cdetect -y "$BUS" 2>&1)
-        local RET=$?
-
-        echo "$OUTPUT"
-
-        if [ "$RET" -ne 0 ]
-        then
-            echo ""
-            echo "ERROR: Failed to scan I2C Bus $BUS."
-            BUS_STATUS=1
-            continue
-        fi
-
-        i2c_print_detected_addresses "$OUTPUT"
-
-        echo ""
-    done
-
-    echo "=============================================================="
-    echo "I2C BUS SCAN COMPLETED"
-    echo "=============================================================="
-
-    return "$BUS_STATUS"
-}
-
-###############################################################################
-# I2C-004 Command Helper
-# TMP1075 Temperature Sensor #1
-###############################################################################
-
-i2c_cmd_tmp1075_1()
-{
-    echo "I2C Bus     : 0"
-    echo "Slave       : $I2C0_TMP1075_1_ADDRESS"
-    echo "Device      : TMP1075NDRLR"
-    echo "Operation   : Read temperature register"
-    echo ""
-
-    i2ctransfer \
-        -y 0 \
-        w1@"$I2C0_TMP1075_1_ADDRESS" 0x00 \
-        r2
-}
-
-###############################################################################
-# I2C-005 Command Helper
-# TMP1075 Temperature Sensor #2
-###############################################################################
-
-i2c_cmd_tmp1075_2()
-{
-    echo "I2C Bus     : 0"
-    echo "Slave       : $I2C0_TMP1075_2_ADDRESS"
-    echo "Device      : TMP1075NDRLR"
-    echo "Operation   : Read temperature register"
-    echo ""
-
-    i2ctransfer \
-        -y 0 \
-        w1@"$I2C0_TMP1075_2_ADDRESS" 0x00 \
-        r2
-}
-
-###############################################################################
-# I2C-006 Command Helper
-# EEPROM 24LC64 Write + Read
-###############################################################################
-
-i2c_cmd_eeprom()
-{
-    echo "I2C Bus     : 0"
-    echo "Slave       : $I2C0_EEPROM_ADDRESS"
-    echo "Device      : 24LC64T-E/MNY"
-    echo "Operation   : Write + Read"
-    echo ""
-
-    echo "EEPROM write:"
-    i2ctransfer \
-        -y 0 \
-        w3@"$I2C0_EEPROM_ADDRESS" 0x00 0x10 0x0A
-
-    if [ $? -ne 0 ]
-    then
-        echo "ERROR: EEPROM write failed."
-        return 1
-    fi
-
-    sleep 0.01
-
-    echo "EEPROM read:"
-    i2ctransfer \
-        -y 0 \
-        w2@"$I2C0_EEPROM_ADDRESS" 0x00 0x10 \
-        r1
-}
-
-###############################################################################
-# I2C-007 Command Helper
-# PAC1931 Current Sensor
-###############################################################################
-
-i2c_cmd_pac1931()
-{
-    echo "I2C Bus     : 0"
-    echo "Slave       : $I2C0_PAC1931_ADDRESS"
-    echo "Device      : PAC1931T-I/J6CX"
-    echo "Operation   : Register write + read"
-    echo ""
-
-    echo "PAC1931 configuration:"
-    i2ctransfer \
-        -y 0 \
-        w2@"$I2C0_PAC1931_ADDRESS" 0x00 0x00
-
-    if [ $? -ne 0 ]
-    then
-        echo "ERROR: PAC1931 configuration command failed."
-        return 1
-    fi
-
-    sleep 0.1
-
-    echo "PAC1931 register read:"
-    i2ctransfer \
-        -y 0 \
-        w1@"$I2C0_PAC1931_ADDRESS" 0x0B \
-        r2
-}
-
-###############################################################################
-# I2C-008 Command Helper
-# ATECC608B Authentication IC
-###############################################################################
-
-i2c_cmd_atecc608b()
-{
-    echo "I2C Bus     : 1"
-    echo "Slave       : $I2C1_ATECC608B_ADDRESS"
-    echo "Device      : ATECC608B"
-    echo "Operation   : Wake + command + response"
-    echo ""
-
-    echo "ATECC608B wake:"
-    i2ctransfer \
-        -y 1 \
-        w1@0x00 0x00 \
-        2>/dev/null
-
-    if [ $? -ne 0 ]
-    then
-        echo "ERROR: ATECC608B wake command failed."
-        return 1
-    fi
-
-    sleep 0.0025
-
-    echo "ATECC608B command:"
-    i2ctransfer \
-        -y 1 \
-        w8@"$I2C1_ATECC608B_ADDRESS" \
-        0x03 0x07 0x1B 0x00 0x00 0x00 0x03 0xA7
-
-    if [ $? -ne 0 ]
-    then
-        echo "ERROR: ATECC608B command failed."
-        return 1
-    fi
-
-    echo "ATECC608B response:"
-    i2ctransfer \
-        -y 1 \
-        r35@"$I2C1_ATECC608B_ADDRESS"
-}
-
-###############################################################################
-# I2C-009 Command Helper
-# Generic slave address verification
-#
-# Configuration:
-#
-# I2C_CUSTOM_BUS
-# I2C_CUSTOM_ADDRESS
-###############################################################################
-
-i2c_cmd_custom_address()
-{
-    local BUS="$I2C_CUSTOM_BUS"
-    local ADDRESS="$I2C_CUSTOM_ADDRESS"
-    local OUTPUT
-
-    if [ -z "$BUS" ] || [ -z "$ADDRESS" ]
-    then
-        echo "SKIP: I2C_CUSTOM_BUS or I2C_CUSTOM_ADDRESS is not configured."
-        return 3
-    fi
-
-    echo "I2C Bus     : $BUS"
-    echo "Slave       : $ADDRESS"
-    echo ""
-
-    OUTPUT=$(i2cdetect -y "$BUS" 2>&1)
-
-    echo "$OUTPUT"
-
-    if echo "$OUTPUT" |
-        grep -Eiq "(^|[[:space:]])${ADDRESS#0x}([[:space:]]|$)"
-    then
-        echo ""
-        echo "Slave address $ADDRESS detected on I2C Bus $BUS."
-        return 0
-    fi
-
-    echo ""
-    echo "ERROR: Slave address $ADDRESS was not detected on I2C Bus $BUS."
-
-    return 1
-}
-
-###############################################################################
-# I2C-010 Command Helper
-# Generic I2C Read
-#
-# Configuration:
-#
-# I2C_CUSTOM_BUS
-# I2C_CUSTOM_ADDRESS
-# I2C_CUSTOM_REGISTER
-# I2C_CUSTOM_READ_LENGTH
-###############################################################################
-
-i2c_cmd_custom_read()
-{
-    local BUS="$I2C_CUSTOM_BUS"
-    local ADDRESS="$I2C_CUSTOM_ADDRESS"
-    local REGISTER="$I2C_CUSTOM_REGISTER"
-    local READ_LENGTH="$I2C_CUSTOM_READ_LENGTH"
-
-    if [ -z "$BUS" ] ||
-       [ -z "$ADDRESS" ] ||
-       [ -z "$REGISTER" ] ||
-       [ -z "$READ_LENGTH" ]
-    then
-        echo "SKIP: Generic I2C read configuration is incomplete."
-        return 3
-    fi
-
-    echo "I2C Bus     : $BUS"
-    echo "Slave       : $ADDRESS"
-    echo "Register    : $REGISTER"
-    echo "Read Length : $READ_LENGTH"
-    echo ""
-
-    i2ctransfer \
-        -y "$BUS" \
-        w1@"$ADDRESS" "$REGISTER" \
-        r"$READ_LENGTH"
-}
-
-###############################################################################
-# I2C-011 Command Helper
-# Generic I2C Write
-#
-# Configuration:
-#
-# I2C_CUSTOM_BUS
-# I2C_CUSTOM_ADDRESS
-# I2C_CUSTOM_REGISTER
-# I2C_CUSTOM_WRITE_DATA
-###############################################################################
-
-i2c_cmd_custom_write()
-{
-    local BUS="$I2C_CUSTOM_BUS"
-    local ADDRESS="$I2C_CUSTOM_ADDRESS"
-    local REGISTER="$I2C_CUSTOM_REGISTER"
-    local WRITE_DATA="$I2C_CUSTOM_WRITE_DATA"
-
-    if [ -z "$BUS" ] ||
-       [ -z "$ADDRESS" ] ||
-       [ -z "$REGISTER" ] ||
-       [ -z "$WRITE_DATA" ]
-    then
-        echo "SKIP: Generic I2C write configuration is incomplete."
-        return 3
-    fi
-
-    echo "I2C Bus     : $BUS"
-    echo "Slave       : $ADDRESS"
-    echo "Register    : $REGISTER"
-    echo "Write Data  : $WRITE_DATA"
-    echo ""
-
-    i2ctransfer \
-        -y "$BUS" \
-        w2@"$ADDRESS" "$REGISTER" "$WRITE_DATA"
-}
-
-###############################################################################
-# I2C-012 Command Helper
-# Generic I2C Write + Readback
-#
-# NOTE:
-# This test should only be enabled for devices/registers where writing is safe.
-###############################################################################
-
-i2c_cmd_custom_write_readback()
-{
-    local BUS="$I2C_CUSTOM_BUS"
-    local ADDRESS="$I2C_CUSTOM_ADDRESS"
-    local REGISTER="$I2C_CUSTOM_REGISTER"
-    local WRITE_DATA="$I2C_CUSTOM_WRITE_DATA"
-    local READ_LENGTH="$I2C_CUSTOM_READ_LENGTH"
-
-    if [ -z "$BUS" ] ||
-       [ -z "$ADDRESS" ] ||
-       [ -z "$REGISTER" ] ||
-       [ -z "$WRITE_DATA" ] ||
-       [ -z "$READ_LENGTH" ]
-    then
-        echo "SKIP: Generic I2C write/readback configuration is incomplete."
-        return 3
-    fi
-
-    echo "I2C Bus     : $BUS"
-    echo "Slave       : $ADDRESS"
-    echo "Register    : $REGISTER"
-    echo "Write Data  : $WRITE_DATA"
-    echo "Read Length : $READ_LENGTH"
-    echo ""
-
-    echo "Write:"
-    i2ctransfer \
-        -y "$BUS" \
-        w2@"$ADDRESS" "$REGISTER" "$WRITE_DATA"
-
-    if [ $? -ne 0 ]
-    then
-        echo "ERROR: Generic I2C write failed."
-        return 1
-    fi
-
-    sleep 0.01
-
-    echo "Readback:"
-    i2ctransfer \
-        -y "$BUS" \
-        w1@"$ADDRESS" "$REGISTER" \
-        r"$READ_LENGTH"
-}
-
-###############################################################################
-# I2C-013 Command Helper
-# I2C adapter / bus information
-###############################################################################
-
-i2c_cmd_bus_information()
-{
-    local BUSES
-    local BUS
-
-    BUSES=$(i2c_get_buses)
-
-    if [ -z "$BUSES" ]
-    then
-        echo "ERROR: No I2C buses detected."
-        return 1
-    fi
-
-    echo "I2C adapter information:"
-    echo ""
-
-    i2cdetect -l
-
-    echo ""
-    echo "Detected bus device nodes:"
-    echo ""
-
-    for BUS in $BUSES
-    do
-        if [ -e "/dev/i2c-$BUS" ]
-        then
-            echo "Bus $BUS : /dev/i2c-$BUS"
-        else
-            echo "WARNING: /dev/i2c-$BUS not found."
-        fi
-    done
-
-    return 0
-}
-
-###############################################################################
-# I2C-014 Command Helper
-# Invalid address/error handling
-#
-# Configuration:
-#
-# I2C_ERROR_TEST_BUS
-# I2C_ERROR_TEST_ADDRESS
-###############################################################################
-
-i2c_cmd_invalid_address()
-{
-    local BUS="${I2C_ERROR_TEST_BUS:-0}"
-    local ADDRESS="${I2C_ERROR_TEST_ADDRESS:-0x7E}"
-
-    echo "I2C Bus       : $BUS"
-    echo "Test Address  : $ADDRESS"
-    echo ""
-    echo "Attempting transaction to intentionally invalid/unused address."
-    echo ""
-
-    i2ctransfer \
-        -y "$BUS" \
-        w1@"$ADDRESS" 0x00 \
-        r1 >/dev/null 2>&1
-
-    if [ $? -eq 0 ]
-    then
-        echo "WARNING: Address $ADDRESS responded."
-        echo "Verify that this address is unused before enabling this test."
-        return 1
-    fi
-
-    echo "Expected I2C transaction failure received."
-    echo "Invalid-address error handling verified."
-
-    return 0
-}
-
-###############################################################################
-# I2C-015 Command Helper
-# Final I2C validation summary
-###############################################################################
-
-i2c_cmd_final_summary()
-{
-    echo "=============================================================="
-    echo "I2C VALIDATION CONFIGURATION"
-    echo "=============================================================="
-
-    echo ""
-    echo "Expected I2C-0 Devices:"
-    echo "  0x48 - TMP1075NDRLR #1"
-    echo "  0x49 - TMP1075NDRLR #2"
-    echo "  0x50 - 24LC64T-E/MNY EEPROM"
-    echo "  0x1F - PAC1931T-I/J6CX"
-
-    echo ""
-    echo "Expected I2C-1 Devices:"
-    echo "  0x60 - ATECC608B"
-
-    echo ""
-    echo "Available I2C buses:"
-    i2c_get_buses
-
-    echo ""
-    echo "I2C adapter information:"
-    i2cdetect -l
-
-    echo ""
-    echo "I2C validation configuration summary completed."
-
-    return 0
-}
-
-###############################################################################
-# I2C-001 : Detect Available I2C Buses
-###############################################################################
-
-i2c_001()
-{
-    log_info "[I2C-001] Detect Available I2C Buses"
-
-    run_command \
-        "I2C-001" \
-        "Detect Available I2C Buses" \
-        "i2c_cmd_detect_buses"
-
-    if [ "$COMMAND_STATUS" -ne 0 ]
-    then
-        TEST_MESSAGE="Unable to detect I2C buses."
-        test_fail
-        return
-    fi
-
-    TEST_MESSAGE="Available I2C buses detected successfully."
-
-    test_pass
-}
-
-###############################################################################
-# I2C-002 : Verify I2C Device Nodes
-###############################################################################
-
-i2c_002()
-{
-    log_info "[I2C-002] Verify I2C Device Nodes"
-
-    run_command \
-        "I2C-002" \
-        "Verify I2C Device Nodes" \
-        "i2c_cmd_device_nodes"
-
-    if [ "$COMMAND_STATUS" -ne 0 ]
-    then
-        TEST_MESSAGE="No /dev/i2c-* device nodes detected."
-        test_fail
-        return
-    fi
-
-    TEST_MESSAGE="I2C device nodes detected successfully."
-
-    test_pass
-}
-
-###############################################################################
-# I2C-003 : Scan All I2C Buses
-###############################################################################
-
-i2c_003()
-{
-    log_info "[I2C-003] Scan All I2C Buses and Detect Slave Addresses"
-
-    run_command \
-        "I2C-003" \
-        "Scan All I2C Buses and Detect Slave Addresses" \
-        "i2c_cmd_scan_all_buses"
-
-    if [ "$COMMAND_STATUS" -ne 0 ]
-    then
-        TEST_MESSAGE="One or more I2C buses could not be scanned."
-        test_fail
-        return
-    fi
-
-    TEST_MESSAGE="All available I2C buses scanned and detected slave addresses printed."
-
-    test_pass
-}
-
-###############################################################################
-# I2C-004 : TMP1075 #1
-###############################################################################
-
-i2c_004()
-{
-    log_info "[I2C-004] Verify TMP1075 Temperature Sensor #1"
-
-    run_command \
-        "I2C-004" \
-        "Verify TMP1075 Temperature Sensor #1" \
-        "i2c_cmd_tmp1075_1"
-
-    if [ "$COMMAND_STATUS" -ne 0 ]
-    then
-        TEST_MESSAGE="TMP1075 sensor at 0x48 did not respond correctly."
-        test_fail
-        return
-    fi
-
-    TEST_MESSAGE="TMP1075 sensor at I2C-0 address 0x48 responded successfully."
-
-    test_pass
-}
-
-###############################################################################
-# I2C-005 : TMP1075 #2
-###############################################################################
-
-i2c_005()
-{
-    log_info "[I2C-005] Verify TMP1075 Temperature Sensor #2"
-
-    run_command \
-        "I2C-005" \
-        "Verify TMP1075 Temperature Sensor #2" \
-        "i2c_cmd_tmp1075_2"
-
-    if [ "$COMMAND_STATUS" -ne 0 ]
-    then
-        TEST_MESSAGE="TMP1075 sensor at 0x49 did not respond correctly."
-        test_fail
-        return
-    fi
-
-    TEST_MESSAGE="TMP1075 sensor at I2C-0 address 0x49 responded successfully."
-
-    test_pass
-}
-
-###############################################################################
-# I2C-006 : EEPROM
-###############################################################################
-
-i2c_006()
-{
-    log_info "[I2C-006] Verify EEPROM 24LC64"
-
-    run_command \
-        "I2C-006" \
-        "Verify EEPROM Write and Read" \
-        "i2c_cmd_eeprom"
-
-    if [ "$COMMAND_STATUS" -ne 0 ]
-    then
-        TEST_MESSAGE="EEPROM write/read operation failed."
-        test_fail
-        return
-    fi
-
-    TEST_MESSAGE="EEPROM at I2C-0 address 0x50 responded successfully."
-
-    test_pass
-}
-
-###############################################################################
-# I2C-007 : PAC1931
-###############################################################################
-
-i2c_007()
-{
-    log_info "[I2C-007] Verify PAC1931 Current Sensor"
-
-    run_command \
-        "I2C-007" \
-        "Verify PAC1931 Current Sensor" \
-        "i2c_cmd_pac1931"
-
-    if [ "$COMMAND_STATUS" -ne 0 ]
-    then
-        TEST_MESSAGE="PAC1931 communication failed."
-        test_fail
-        return
-    fi
-
-    TEST_MESSAGE="PAC1931 at I2C-0 address 0x1F responded successfully."
-
-    test_pass
-}
-
-###############################################################################
-# I2C-008 : ATECC608B
-###############################################################################
-
-i2c_008()
-{
-    log_info "[I2C-008] Verify ATECC608B Authentication IC"
-
-    run_command \
-        "I2C-008" \
-        "Verify ATECC608B Authentication IC" \
-        "i2c_cmd_atecc608b"
-
-    if [ "$COMMAND_STATUS" -ne 0 ]
-    then
-        TEST_MESSAGE="ATECC608B communication failed."
-        test_fail
-        return
-    fi
-
-    TEST_MESSAGE="ATECC608B at I2C-1 address 0x60 responded successfully."
-
-    test_pass
-}
-
-###############################################################################
-# I2C-009 : Generic Address
-###############################################################################
-
-i2c_009()
-{
-    log_info "[I2C-009] Verify Custom I2C Slave Address"
-
-    run_command \
-        "I2C-009" \
-        "Verify Custom I2C Slave Address" \
-        "i2c_cmd_custom_address"
-
-    if [ "$COMMAND_STATUS" -eq 3 ]
-    then
-        TEST_MESSAGE="Custom I2C slave address is not configured."
-        test_skip
-        return
-    fi
-
-    if [ "$COMMAND_STATUS" -ne 0 ]
-    then
-        TEST_MESSAGE="Configured custom I2C slave address was not detected."
-        test_fail
-        return
-    fi
-
-    TEST_MESSAGE="Configured custom I2C slave address detected successfully."
-
-    test_pass
-}
-
-###############################################################################
-# I2C-010 : Generic Read
-###############################################################################
-
-i2c_010()
-{
-    log_info "[I2C-010] Verify Custom I2C Read"
-
-    run_command \
-        "I2C-010" \
-        "Verify Custom I2C Read" \
-        "i2c_cmd_custom_read"
-
-    if [ "$COMMAND_STATUS" -eq 3 ]
-    then
-        TEST_MESSAGE="Custom I2C read configuration is not available."
-        test_skip
-        return
-    fi
-
-    if [ "$COMMAND_STATUS" -ne 0 ]
-    then
-        TEST_MESSAGE="Custom I2C read operation failed."
-        test_fail
-        return
-    fi
-
-    TEST_MESSAGE="Custom I2C read operation completed successfully."
-
-    test_pass
-}
-
-###############################################################################
-# I2C-011 : Generic Write
-###############################################################################
-
-i2c_011()
-{
-    log_info "[I2C-011] Verify Custom I2C Write"
-
-    run_command \
-        "I2C-011" \
-        "Verify Custom I2C Write" \
-        "i2c_cmd_custom_write"
-
-    if [ "$COMMAND_STATUS" -eq 3 ]
-    then
-        TEST_MESSAGE="Custom I2C write configuration is not available."
-        test_skip
-        return
-    fi
-
-    if [ "$COMMAND_STATUS" -ne 0 ]
-    then
-        TEST_MESSAGE="Custom I2C write operation failed."
-        test_fail
-        return
-    fi
-
-    TEST_MESSAGE="Custom I2C write operation completed successfully."
-
-    test_pass
-}
-
-###############################################################################
-# I2C-012 : Generic Write + Readback
-###############################################################################
-
-i2c_012()
-{
-    log_info "[I2C-012] Verify Custom I2C Write and Readback"
-
-    run_command \
-        "I2C-012" \
-        "Verify Custom I2C Write and Readback" \
-        "i2c_cmd_custom_write_readback"
-
-    if [ "$COMMAND_STATUS" -eq 3 ]
-    then
-        TEST_MESSAGE="Custom I2C write/readback configuration is not available."
-        test_skip
-        return
-    fi
-
-    if [ "$COMMAND_STATUS" -ne 0 ]
-    then
-        TEST_MESSAGE="Custom I2C write/readback operation failed."
-        test_fail
-        return
-    fi
-
-    TEST_MESSAGE="Custom I2C write/readback operation completed successfully."
-
-    test_pass
-}
-
-###############################################################################
-# I2C-013 : Bus Information
-###############################################################################
-
-i2c_013()
-{
-    log_info "[I2C-013] Verify I2C Bus Information"
-
-    run_command \
-        "I2C-013" \
-        "Verify I2C Bus Information" \
-        "i2c_cmd_bus_information"
-
-    if [ "$COMMAND_STATUS" -ne 0 ]
-    then
-        TEST_MESSAGE="Unable to retrieve I2C adapter information."
-        test_fail
-        return
-    fi
-
-    TEST_MESSAGE="I2C bus and adapter information retrieved successfully."
-
-    test_pass
-}
-
-###############################################################################
-# I2C-014 : Invalid Address Handling
-###############################################################################
-
-i2c_014()
-{
-    log_info "[I2C-014] Verify I2C Invalid Address Handling"
-
-    run_command \
-        "I2C-014" \
-        "Verify I2C Invalid Address Handling" \
-        "i2c_cmd_invalid_address"
-
-    if [ "$COMMAND_STATUS" -ne 0 ]
-    then
-        TEST_MESSAGE="I2C invalid-address error handling verification failed."
-        test_fail
-        return
-    fi
-
-    TEST_MESSAGE="I2C invalid-address error handling verified successfully."
-
-    test_pass
-}
-
-###############################################################################
-# I2C-015 : Final Summary
-###############################################################################
-
-i2c_015()
-{
-    log_info "[I2C-015] I2C Final Validation Summary"
-
-    run_command \
-        "I2C-015" \
-        "I2C Final Validation Summary" \
-        "i2c_cmd_final_summary"
-
-    if [ "$COMMAND_STATUS" -ne 0 ]
-    then
-        TEST_MESSAGE="Unable to generate I2C validation summary."
-        test_fail
-        return
-    fi
-
-    TEST_MESSAGE="I2C validation summary generated successfully."
-
-    test_pass
-}
-
-###############################################################################
-# Register I2C Tests
-###############################################################################
-
-i2c_register_tests()
-{
-    register_test \
-        -i "I2C-001" \
-        -f i2c_001 \
-        -n "Detect Available I2C Buses" \
-        -c "peripheral" \
-        -t "auto" \
-        -p "high" \
-        -o 10 \
-        -g "i2c,bus,detect" \
-        -w "Embedded Team" \
-        -b "Linux" \
-        -e "yes" \
-        -d "Detect all available Linux I2C buses."
+        -d "Detect all available I2C buses, scan every bus and record detected slave addresses."
 
     register_test \
         -i "I2C-002" \
         -f i2c_002 \
-        -n "Verify I2C Device Nodes" \
+        -n "Verify TMP1075 Temperature Sensor @ 0x48" \
         -c "peripheral" \
         -t "auto" \
         -p "high" \
         -o 20 \
-        -g "i2c,device,node" \
-        -w "Embedded Team" \
-        -b "Linux" \
-        -e "yes" \
-        -d "Verify that /dev/i2c-* device nodes are available."
-
-    register_test \
-        -i "I2C-003" \
-        -f i2c_003 \
-        -n "Scan All I2C Buses and Detect Slave Addresses" \
-        -c "peripheral" \
-        -t "auto" \
-        -p "high" \
-        -o 30 \
-        -g "i2c,scan,address,i2cdetect" \
-        -w "Embedded Team" \
-        -b "Linux" \
-        -e "yes" \
-        -d "Scan every available I2C bus and print all detected slave addresses."
-
-    register_test \
-        -i "I2C-004" \
-        -f i2c_004 \
-        -n "Verify TMP1075 Temperature Sensor #1" \
-        -c "peripheral" \
-        -t "auto" \
-        -p "high" \
-        -o 40 \
         -g "i2c,tmp1075,temperature,0x48" \
         -w "Embedded Team" \
         -b "Linux" \
         -e "yes" \
-        -d "Verify TMP1075 sensor communication at I2C-0 address 0x48."
+        -d "Verify TMP1075 temperature sensor at bus 0 address 0x48."
 
     register_test \
-        -i "I2C-005" \
-        -f i2c_005 \
-        -n "Verify TMP1075 Temperature Sensor #2" \
+        -i "I2C-003" \
+        -f i2c_003 \
+        -n "Verify TMP1075 Temperature Sensor @ 0x49" \
         -c "peripheral" \
         -t "auto" \
         -p "high" \
-        -o 50 \
+        -o 30 \
         -g "i2c,tmp1075,temperature,0x49" \
         -w "Embedded Team" \
         -b "Linux" \
         -e "yes" \
-        -d "Verify TMP1075 sensor communication at I2C-0 address 0x49."
+        -d "Verify TMP1075 temperature sensor at bus 0 address 0x49."
 
     register_test \
-        -i "I2C-006" \
-        -f i2c_006 \
-        -n "Verify EEPROM Write and Read" \
+        -i "I2C-004" \
+        -f i2c_004 \
+        -n "Verify EEPROM @ 0x50" \
         -c "peripheral" \
         -t "auto" \
         -p "high" \
-        -o 60 \
-        -g "i2c,eeprom,24lc64,read,write" \
+        -o 40 \
+        -g "i2c,eeprom,24lc64,0x50" \
         -w "Embedded Team" \
         -b "Linux" \
         -e "yes" \
-        -d "Verify 24LC64 EEPROM write and read communication."
+        -d "Verify 24LC64 EEPROM at bus 0 address 0x50."
 
     register_test \
-        -i "I2C-007" \
-        -f i2c_007 \
-        -n "Verify PAC1931 Current Sensor" \
+        -i "I2C-005" \
+        -f i2c_005 \
+        -n "Verify PAC1931 Current Sensor @ 0x1F" \
         -c "peripheral" \
         -t "auto" \
         -p "high" \
-        -o 70 \
+        -o 50 \
         -g "i2c,pac1931,current,0x1f" \
         -w "Embedded Team" \
         -b "Linux" \
         -e "yes" \
-        -d "Verify PAC1931 current sensor communication."
+        -d "Verify PAC1931 current sensor at bus 0 address 0x1F."
 
     register_test \
-        -i "I2C-008" \
-        -f i2c_008 \
-        -n "Verify ATECC608B Authentication IC" \
+        -i "I2C-006" \
+        -f i2c_006 \
+        -n "Verify ATECC608B Authentication IC @ 0x60" \
         -c "peripheral" \
         -t "auto" \
         -p "high" \
-        -o 80 \
+        -o 60 \
         -g "i2c,atecc608b,authentication,0x60" \
         -w "Embedded Team" \
         -b "Linux" \
         -e "yes" \
-        -d "Verify ATECC608B authentication IC communication."
+        -d "Verify ATECC608B authentication IC at bus 1 address 0x60."
+
+    register_test \
+        -i "I2C-007" \
+        -f i2c_007 \
+        -n "Verify Generic I2C Slave Address" \
+        -c "peripheral" \
+        -t "auto" \
+        -p "medium" \
+        -o 70 \
+        -g "i2c,generic,slave,address" \
+        -w "Embedded Team" \
+        -b "Linux" \
+        -e "yes" \
+        -d "Verify configured generic I2C slave address is detected."
+
+    register_test \
+        -i "I2C-008" \
+        -f i2c_008 \
+        -n "Verify Generic I2C Read" \
+        -c "peripheral" \
+        -t "auto" \
+        -p "medium" \
+        -o 80 \
+        -g "i2c,generic,read,i2cget" \
+        -w "Embedded Team" \
+        -b "Linux" \
+        -e "yes" \
+        -d "Verify generic I2C register read operation."
 
     register_test \
         -i "I2C-009" \
         -f i2c_009 \
-        -n "Verify Custom I2C Slave Address" \
+        -n "Verify Generic I2C Write" \
         -c "peripheral" \
         -t "auto" \
         -p "medium" \
         -o 90 \
-        -g "i2c,custom,address" \
+        -g "i2c,generic,write,i2cset" \
         -w "Embedded Team" \
         -b "Linux" \
         -e "yes" \
-        -d "Verify a configurable custom I2C slave address."
+        -d "Verify generic I2C register write operation."
 
     register_test \
         -i "I2C-010" \
         -f i2c_010 \
-        -n "Verify Custom I2C Read" \
+        -n "Verify Generic I2C Write + Readback" \
         -c "peripheral" \
         -t "auto" \
-        -p "medium" \
+        -p "high" \
         -o 100 \
-        -g "i2c,custom,read" \
+        -g "i2c,generic,write,readback" \
         -w "Embedded Team" \
         -b "Linux" \
         -e "yes" \
-        -d "Verify a configurable custom I2C read operation."
+        -d "Verify generic I2C write followed by readback comparison."
 
     register_test \
         -i "I2C-011" \
         -f i2c_011 \
-        -n "Verify Custom I2C Write" \
+        -n "Validate Configured Generic I2C Devices" \
         -c "peripheral" \
         -t "auto" \
         -p "medium" \
         -o 110 \
-        -g "i2c,custom,write" \
+        -g "i2c,generic,configured,devices" \
         -w "Embedded Team" \
         -b "Linux" \
         -e "yes" \
-        -d "Verify a configurable custom I2C write operation."
+        -d "Verify all configured generic I2C devices are physically detected."
 
     register_test \
         -i "I2C-012" \
         -f i2c_012 \
-        -n "Verify Custom I2C Write and Readback" \
+        -n "Report Detected but Unconfigured I2C Devices" \
         -c "peripheral" \
         -t "auto" \
-        -p "medium" \
+        -p "low" \
         -o 120 \
-        -g "i2c,custom,write,readback" \
+        -g "i2c,generic,unconfigured,audit" \
         -w "Embedded Team" \
         -b "Linux" \
         -e "yes" \
-        -d "Verify configurable I2C write followed by readback."
-
-    register_test \
-        -i "I2C-013" \
-        -f i2c_013 \
-        -n "Verify I2C Bus Information" \
-        -c "peripheral" \
-        -t "auto" \
-        -p "medium" \
-        -o 130 \
-        -g "i2c,bus,adapter" \
-        -w "Embedded Team" \
-        -b "Linux" \
-        -e "yes" \
-        -d "Verify I2C adapter and bus information."
-
-    register_test \
-        -i "I2C-014" \
-        -f i2c_014 \
-        -n "Verify I2C Invalid Address Handling" \
-        -c "peripheral" \
-        -t "auto" \
-        -p "low" \
-        -o 140 \
-        -g "i2c,error,invalid,address" \
-        -w "Embedded Team" \
-        -b "Linux" \
-        -e "yes" \
-        -d "Verify expected I2C failure when accessing an unused address."
-
-    register_test \
-        -i "I2C-015" \
-        -f i2c_015 \
-        -n "I2C Final Validation Summary" \
-        -c "peripheral" \
-        -t "auto" \
-        -p "low" \
-        -o 150 \
-        -g "i2c,summary,validation" \
-        -w "Embedded Team" \
-        -b "Linux" \
-        -e "yes" \
-        -d "Generate the final I2C validation configuration and bus summary."
+        -d "Report I2C devices detected on the system but not configured."
 }
 
 ###############################################################################
@@ -1529,28 +1284,24 @@ i2c_init()
     log_info "Starting I2C Validation"
     log_info "========================================="
 
-    if ! command -v i2cdetect >/dev/null 2>&1
+    i2c_runtime_init
+
+    log_info "I2C Runtime Directory:"
+    log_info "  $I2C_RUNTIME_DIR"
+
+    log_info "Generic I2C Device:"
+    log_info "  Bus     : $I2C_GENERIC_BUS"
+    log_info "  Address : $I2C_GENERIC_ADDRESS"
+
+    if [ "${#I2C_GENERIC_DEVICES[@]}" -gt 0 ]
     then
-        TEST_MESSAGE="i2cdetect utility is not installed."
-        log_error "$TEST_MESSAGE"
-        return 1
+        log_info "Configured Generic I2C Devices:"
+
+        for DEVICE in "${I2C_GENERIC_DEVICES[@]}"
+        do
+            log_info "  $DEVICE"
+        done
     fi
-
-    if ! command -v i2ctransfer >/dev/null 2>&1
-    then
-        TEST_MESSAGE="i2ctransfer utility is not installed."
-        log_error "$TEST_MESSAGE"
-        return 1
-    fi
-
-    log_info "Expected I2C-0 Devices:"
-    log_info "  0x48 - TMP1075NDRLR #1"
-    log_info "  0x49 - TMP1075NDRLR #2"
-    log_info "  0x50 - 24LC64T-E/MNY EEPROM"
-    log_info "  0x1F - PAC1931T-I/J6CX"
-
-    log_info "Expected I2C-1 Device:"
-    log_info "  0x60 - ATECC608B"
 
     i2c_register_tests
 
@@ -1558,7 +1309,7 @@ i2c_init()
 }
 
 ###############################################################################
-# Module Initialization When Sourced
+# Module Initialization
 ###############################################################################
 
 i2c_init
@@ -1566,4 +1317,3 @@ i2c_init
 ###############################################################################
 # End Of File
 ###############################################################################
-```
