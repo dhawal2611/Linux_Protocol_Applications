@@ -223,12 +223,15 @@ SATA_FIO_RUNTIME=60
 # USB Validation Configuration
 ###############################################################################
 
-# USB validation configuration
-
 USB_TEST_FILE="usb_validation_test.bin"
 USB_TEST_SIZE=100
 USB_PERF_SIZE=100
 USB_FIO_SIZE="256M"
 USB_FIO_RUNTIME=30
 
+###############################################################################
+# Runtime folder path
+###############################################################################
+
 RUNTIME_DIR="${VALIDATION_FRAMEWORK_ROOT}/runtime"
+
