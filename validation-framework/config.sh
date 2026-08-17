@@ -235,3 +235,27 @@ USB_FIO_RUNTIME=30
 
 RUNTIME_DIR="${VALIDATION_FRAMEWORK_ROOT}/runtime"
 
+###############################################################################
+# GPIO Configuration
+###############################################################################
+
+# GPIO sysfs base/offset.
+#
+# Board-specific value.
+#
+# Example:
+# Board A : 0
+# Board B : 512
+# Board C : 1000
+#
+GPIO_OFFSET=512
+
+# Logical GPIO pins to validate.
+GPIO_PINS=(17 18 22 23)
+
+###############################################################################
+# Runtime Variables
+###############################################################################
+
+GPIO_DISCOVERY_DONE=0
+GPIO_SYSFS_BASE="/sys/class/gpio"
