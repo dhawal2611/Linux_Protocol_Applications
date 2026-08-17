@@ -16,8 +16,6 @@ source "$SCRIPT_DIR/lib/assertions.sh"
 source "$SCRIPT_DIR/lib/test_registry.sh"
 source "$SCRIPT_DIR/lib/framework_check.sh"
 
-LOOP_MODE=0
-
 ###############################################################################
 # Framework Self Check
 ###############################################################################
@@ -42,20 +40,20 @@ initialize_framework
 # Generate Log File Name
 ###############################################################################
 
-TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+#TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 
 #
 # Use first selected module/suite in log file name
 #
-LOG_TARGET="${MODULE_LIST[0]}"
+#LOG_TARGET="${MODULE_LIST[0]}"
 
 #
 # If multiple modules are selected, use "multi"
 #
-if [ "${#MODULE_LIST[@]}" -gt 1 ]
-then
-    LOG_TARGET="multi"
-fi
+#if [ "${#MODULE_LIST[@]}" -gt 1 ]
+#then
+#    LOG_TARGET="multi"
+#fi
 
 ###############################################################################
 # Create Log File
@@ -70,19 +68,18 @@ fi
 ###############################################################################
 # Create CSV Report
 ###############################################################################
-if [ "$CSV_REPORT_ENABLE" -eq 1 ]
-then
-
-    if [ -z "$CSV_FILE" ]
-    then
-        CSV_FILE="${LOG_DIR}/validation_${TIMESTAMP}_${LOG_TARGET}.csv"
-    fi
-
-    #echo "\"Module\",\"Test ID\",\"Test Name\",\"Command\",\"Result\",\"Exit Status\",\"Execution Time(s)\",\"Start Time\",\"End Time\",\"Output\"" > "$CSV_FILE"
-    #printf '"Module","Test ID","Test Name","Command","Result","Exit Status","Execution Time(s)","Start Time","End Time","Output"\n' \> "$CSV_FILE"
-    csv_create_header
-
-fi
+#if [ "$CSV_REPORT_ENABLE" -eq 1 ]
+#then
+#    if [ -z "$CSV_FILE" ]
+#    then
+#        CSV_FILE="${LOG_DIR}/validation_${TIMESTAMP}_${LOG_TARGET}.csv"
+#    fi
+#
+#    #echo "\"Module\",\"Test ID\",\"Test Name\",\"Command\",\"Result\",\"Exit Status\",\"Execution Time(s)\",\"Start Time\",\"End Time\",\"Output\"" > "$CSV_FILE"
+#    #printf '"Module","Test ID","Test Name","Command","Result","Exit Status","Execution Time(s)","Start Time","End Time","Output"\n' \> "$CSV_FILE"
+#    csv_create_header
+#
+#fi
 
 ###############################################################################
 # Execute a Single Module
