@@ -13,8 +13,6 @@ SUITE_SELECTED=0
 
 LOOP_MODE=0
 
-CSV_REPORT_ENABLE=0
-
 CSV_FILE=""
 
 LOG_TARGET=""
@@ -26,8 +24,6 @@ TEST_LOG_OUTPUT_MODE="console"
 RUN_ALL_MODULES=0
 
 FRAMEWORK_VERSION="1.0.0"
-
-LOG_DIR="./logs"
 
 # Framework Directory Structure Configuration
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -259,3 +255,29 @@ GPIO_PINS=(17 18 22 23)
 
 GPIO_DISCOVERY_DONE=0
 GPIO_SYSFS_BASE="/sys/class/gpio"
+
+###############################################################################
+# Ethernet Configuration
+#
+# These variables should preferably be defined in config.sh
+###############################################################################
+
+ETH_INTERFACES="${ETH_INTERFACES:-eth0}"
+
+# Ping / iperf server corresponding to each interface.
+#
+# Format:
+#   interface:server_ip
+#
+# Example:
+#   ETH_SERVER_MAP=("eth0:192.168.1.100" "eth1:192.168.2.100")
+#
+if [ -z "${ETH_SERVER_MAP+x}" ]
+then
+    ETH_SERVER_MAP=(
+        "eth0:192.168.134.174"
+    )
+fi
+
+ETH_IPERF_DURATION="${ETH_IPERF_DURATION:-10}"
+
