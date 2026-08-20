@@ -60,6 +60,11 @@ write_logger()
                 echo "${PREFIX} ${MESSAGE}" >> "$LOG_FILE"
             ;;
 
+        none)
+            # Suppress all logger output — used in loop mode subprocesses
+            # where only CSV is written.
+            ;;
+
         *)
 
             echo -e "${COLOR}${PREFIX}${NC} ${MESSAGE}"

@@ -163,7 +163,7 @@ parse_logger()
 {
     case "$1" in
 
-        console|file|both)
+        console|file|both|none)
 
             LOGGER_OUTPUT_MODE="$1"
             ;;
@@ -177,6 +177,7 @@ parse_logger()
             echo "    console"
             echo "    file"
             echo "    both"
+            echo "    none"
             echo
 
             exit 1

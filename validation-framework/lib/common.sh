@@ -29,6 +29,27 @@ initialize_framework()
     #
     check_root
 }
+
+###############################################################################
+# Create CSV Header
+#
+# Writes the header row only when the CSV file is empty (new file).
+# This makes it safe to call on a shared CSV that accumulates rows across
+# multiple loop iterations — subsequent calls are a no-op.
+###############################################################################
+
+csv_create_header()
+{
+    [ "$CSV_REPORT_ENABLE" -eq 0 ] && return
+
+    # Only write the header when the file is newly created (empty).
+    # Guards against overwriting rows when the CSV is shared across iterations.
+    [ -s "$CSV_FILE" ] && return
+
+    printf '"Module","Test ID","Test Name","Command","Result","Exit Status","Execution Time(s)","Start Time","End Time","Reason"\n' \
+    > "$CSV_FILE"
+}
+
 ###############################################################################
 # Create Log/CSV Files
 ###############################################################################
@@ -64,30 +85,18 @@ create_log_files()
 
     #
     # CSV Report
+    # Header is written by csv_create_header() from command.sh.
     #
     if [ "$CSV_REPORT_ENABLE" -eq 1 ]
     then
+	touch "$CSV_FILE"
         if [ -z "$CSV_FILE" ]
         then
             CSV_FILE="${CSV_DIR}/validation_${TIMESTAMP}_${LOG_TARGET}.csv"
         fi
-        #echo "\"Module\",\"Test ID\",\"Test Name\",\"Command\",\"Result\",\"Exit Status\",\"Execution Time(s)\",\"Start Time\",\"End Time\",\"Output\"" > "$CSV_FILE"
-        #printf '"Module","Test ID","Test Name","Command","Result","Exit Status","Execution Time(s)","Start Time","End Time","Output"\n' \> "$CSV_FILE"
+        #echo "\"Module\",\"Test ID\",\"Test Name\",\"Command\",\"Result\",\"Exit Status\",\"Execution Time(s)\",\"Start Time\",\"End Time\",\"Reason\"" > "$CSV_FILE"
+        #printf '"Module","Test ID","Test Name","Command","Result","Exit Status","Execution Time(s)","Start Time","End Time","Reason"\n' \> "$CSV_FILE"
         csv_create_header
-    fi
-
-    if [ "$CSV_REPORT_ENABLE" -eq 1 ]
-    then
-        touch "$CSV_FILE"
-
-        #
-        # CSV Header
-        #
-        if [ ! -s "$CSV_FILE" ]
-        then
-            echo "Test ID,Test Name,Result,Start Time,End Time,Execution Time,Command" \
-                > "$CSV_FILE"
-        fi
     fi
 }
 

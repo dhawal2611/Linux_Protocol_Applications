@@ -87,22 +87,6 @@ validate_output()
     echo "$COMMAND_OUTPUT" | grep -q "$PATTERN"
 }
 
-
-###############################################################################
-# Create CSV Header
-###############################################################################
-
-csv_create_header()
-{
-    #
-    # CSV Disabled
-    #
-    [ "$CSV_REPORT_ENABLE" -eq 0 ] && return
-
-    printf '"Module","Test ID","Test Name","Command","Result","Exit Status","Execution Time(s)","Start Time","End Time","Output"\n' \
-    > "$CSV_FILE"
-}
-
 ###############################################################################
 # Write CSV Entry
 ###############################################################################
@@ -111,34 +95,28 @@ csv_write()
 {
     local RESULT="$1"
 
-    #
-    # CSV Disabled
-    #
     [ "$CSV_REPORT_ENABLE" -eq 0 ] && return
 
-    local MODULE
-    local TESTID
-    local TESTNAME
-    local CMD
-    local OUTPUT
-
-    MODULE=$(csv_escape "$LAST_MODULE")
-    TESTID=$(csv_escape "$LAST_TEST_ID")
-    TESTNAME=$(csv_escape "$LAST_TEST_NAME")
-    CMD=$(csv_escape "$LAST_COMMAND")
-    OUTPUT=$(csv_escape "$COMMAND_OUTPUT")
+    # Reason is recorded only when the test failed or was skipped.
+    # For PASS the field is left empty - keeps the CSV compact over
+    # thousands of regression iterations.
+    local REASON=""
+    if [ "$RESULT" = "FAIL" ] || [ "$RESULT" = "SKIPPED" ]
+    then
+        REASON=$(csv_escape "$TEST_MESSAGE")
+    fi
 
     printf '"%s","%s","%s","%s","%s","%s","%s","%s","%s","%s"\n' \
-        "$MODULE" \
-        "$TESTID" \
-        "$TESTNAME" \
-        "$CMD" \
+        "$(csv_escape "$LAST_MODULE")" \
+        "$(csv_escape "$LAST_TEST_ID")" \
+        "$(csv_escape "$LAST_TEST_NAME")" \
+        "$(csv_escape "$LAST_COMMAND")" \
         "$RESULT" \
         "$COMMAND_STATUS" \
         "$COMMAND_EXEC_TIME" \
         "$COMMAND_START_TIME" \
         "$COMMAND_END_TIME" \
-        "$OUTPUT" \
+        "$REASON" \
         >> "$CSV_FILE"
 }
 
@@ -251,14 +229,8 @@ run_command()
 
 test_pass()
 {
-    #
-    # Console/File PASS message
-    #
     log_pass "$TEST_ID"
 
-    #
-    # Test Summary
-    #
     write_test_log "
 --------------------------------------------------------------------------------
 Test Summary
@@ -275,11 +247,7 @@ End Time        : $COMMAND_END_TIME
 ################################################################################
 "
 
-    #
-    # Update CSV Report
-    #
     csv_write "PASS"
-
     return 0
 }
 
@@ -289,67 +257,49 @@ End Time        : $COMMAND_END_TIME
 
 test_fail()
 {
-    #
-    # Console/File FAIL message
-    #
     log_fail "$TEST_ID"
 
-    #
-    # Test Summary
-    #
+    # Reason log - written only for failures so the log file stays small
+    # during regression runs where most tests pass
     write_test_log "
 --------------------------------------------------------------------------------
 Test Summary
 --------------------------------------------------------------------------------
-
 Result          : FAIL
 Reason          : ${TEST_MESSAGE}
 Exit Status     : $COMMAND_STATUS
 Execution Time  : ${COMMAND_EXEC_TIME} sec
 End Time        : $COMMAND_END_TIME
-
 ################################################################################
 # TEST END : $TEST_ID
 ################################################################################
 "
 
-    #
-    # Update CSV Report
-    #
     csv_write "FAIL"
-
     return 1
 }
-
-###############################################################################
-# Test Skip
-###############################################################################
 
 test_skip()
 {
     TEST_RESULT="SKIPPED"
     log_skip "$TEST_ID"
 
+    # Reason log - written only for skipped tests
     write_test_log "
 --------------------------------------------------------------------------------
 Test Summary
 --------------------------------------------------------------------------------
-
 Result          : SKIPPED
 Reason          : ${TEST_MESSAGE}
 Exit Status     : -
 Execution Time  : ${COMMAND_EXEC_TIME} sec
 End Time        : ${COMMAND_END_TIME}
-
 ################################################################################
 # TEST END : ${TEST_ID}
 ################################################################################
 "
 
-    log_warn "${TEST_ID}"
-
     csv_write "SKIPPED"
-
     return 0
 }
 
