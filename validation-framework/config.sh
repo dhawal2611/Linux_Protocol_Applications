@@ -13,6 +13,20 @@ SUITE_SELECTED=0
 
 LOOP_MODE=0
 
+###############################################################################
+# Loop Duration
+#
+# Used by the direct CLI --loop path.
+#
+# 0           : Run indefinitely until Ctrl+C  (default)
+# N (seconds) : Run for N seconds then stop
+#
+# Set via:
+#   ./validate.sh cpu --loop                    # infinite
+#   ./validate.sh cpu --loop --duration 5       # 5 minutes
+###############################################################################
+LOOP_DURATION_SECS=0
+
 CSV_FILE=""
 
 LOG_TARGET=""
@@ -58,6 +72,15 @@ CSV_REPORT_ENABLE=0
 # CSV Report File
 ###############################################################################
 CSV_FILE=""
+
+###############################################################################
+# CSV File Override
+#
+# Set by parse_csv() when the user passes --csv <file>.
+# When non-empty, run_single_module() skips per-module auto-naming and
+# writes all modules to this single custom file instead.
+###############################################################################
+CSV_FILE_OVERRIDE=""
 
 ###############################################################################
 # Log File

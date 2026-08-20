@@ -52,52 +52,20 @@ csv_create_header()
 
 ###############################################################################
 # Create Log/CSV Files
+#
+# Ensures the logs/ and csv/ output directories exist.
+#
+# Actual per-module file paths (LOG_FILE, CSV_FILE) are set by
+# run_single_module() in validate.sh before each module runs, so that
+# every module appends to its own named file:
+#   logs/<module>.log
+#   csv/<module>.csv
 ###############################################################################
 
 create_log_files()
 {
-    ###############################################################################
-    # Generate Log File Name
-    ###############################################################################
-
-    TIMESTAMP=$(date +%Y%m%d_%H%M%S)
-
-    #
-    # Use first selected module/suite in log file name
-    #
-    LOG_TARGET="${MODULE_LIST[0]}"
-
-    #
-    # If multiple modules are selected, use "multi"
-    #
-    if [ "${#MODULE_LIST[@]}" -gt 1 ]
-    then
-        LOG_TARGET="multi"
-    fi
-    #
-    # Log File
-    #
-    if [ "$LOG_FILE_ENABLE" -eq 1 ]
-    then
-	LOG_FILE="${LOG_DIR}/validation_${TIMESTAMP}_${LOG_TARGET}.log"
-        touch "$LOG_FILE"
-    fi
-
-    #
-    # CSV Report
-    # Header is written by csv_create_header() from command.sh.
-    #
-    if [ "$CSV_REPORT_ENABLE" -eq 1 ]
-    then
-	touch "$CSV_FILE"
-        if [ -z "$CSV_FILE" ]
-        then
-            CSV_FILE="${CSV_DIR}/validation_${TIMESTAMP}_${LOG_TARGET}.csv"
-        fi
-        #echo "\"Module\",\"Test ID\",\"Test Name\",\"Command\",\"Result\",\"Exit Status\",\"Execution Time(s)\",\"Start Time\",\"End Time\",\"Reason\"" > "$CSV_FILE"
-        #printf '"Module","Test ID","Test Name","Command","Result","Exit Status","Execution Time(s)","Start Time","End Time","Reason"\n' \> "$CSV_FILE"
-        csv_create_header
-    fi
+    [ "$LOG_FILE_ENABLE"   -eq 1 ] && mkdir -p "$LOG_DIR"
+    [ "$CSV_REPORT_ENABLE" -eq 1 ] && mkdir -p "$CSV_DIR"
 }
 
 ###############################################################################

@@ -226,11 +226,13 @@ parse_csv()
     CSV_REPORT_ENABLE=1
 
     #
-    # Optional CSV filename
+    # Optional CSV filename — if provided, honour it and lock it so that
+    # run_single_module() does not overwrite it with the per-module path.
     #
     if [ -n "$1" ] && [[ "$1" != -* ]]
     then
         CSV_FILE="$1"
+        CSV_FILE_OVERRIDE="$1"   # prevents per-module auto-naming
         shift
     fi
 }
@@ -242,6 +244,29 @@ parse_csv()
 parse_loop()
 {
     LOOP_MODE=1
+}
+
+###############################################################################
+# Parse Loop Duration
+#
+# Converts minutes to seconds and stores in LOOP_DURATION_SECS.
+# Called when --duration <minutes> is found after --loop.
+###############################################################################
+
+parse_duration()
+{
+    local MIN="$1"
+
+    if ! [[ "$MIN" =~ ^[0-9]+([.][0-9]+)?$ ]] || \
+       awk "BEGIN {exit !($MIN <= 0)}" 2>/dev/null
+    then
+        echo ""
+        echo "ERROR : Invalid duration '${MIN}'. Must be a positive number (minutes)."
+        echo ""
+        exit 1
+    fi
+
+    LOOP_DURATION_SECS=$(awk "BEGIN {printf \"%.0f\", $MIN * 60}")
 }
 
 ###############################################################################
@@ -286,26 +311,47 @@ show_help()
     echo
     echo "Usage:"
     echo
-    echo "    ./validate.sh [OPTIONS] <MODULE(S)>"
-    echo "    ./validate.sh [OPTIONS] <SUITE(S)>"
+    echo "    ./validate.sh                                  Interactive menu"
+    echo "    ./validate.sh [OPTIONS] <MODULE(S)|SUITE(S)>   Direct CLI mode"
     echo
+
     echo "==============================================================================="
     echo "AVAILABLE MODULES"
     echo "==============================================================================="
+    echo
 
-    for MODULE in "${AVAILABLE_MODULES[@]}"
+    # Print modules in 3 columns (auto-sized)
+    local MOD_TOTAL=${#AVAILABLE_MODULES[@]}
+    local MOD_COLS=3
+    local MOD_ROWS=$(( (MOD_TOTAL + MOD_COLS - 1) / MOD_COLS ))
+    local MOD_MAX=0
+    local _M
+    for _M in "${AVAILABLE_MODULES[@]}"
     do
-        printf "    %-20s\n" "$MODULE"
+        (( ${#_M} > MOD_MAX )) && MOD_MAX=${#_M}
+    done
+    local MOD_CW=$(( MOD_MAX + 2 ))
+
+    local _R _C _IDX
+    for (( _R=0; _R<MOD_ROWS; _R++ ))
+    do
+        printf "    "
+        for (( _C=0; _C<MOD_COLS; _C++ ))
+        do
+            _IDX=$(( _C * MOD_ROWS + _R ))
+            (( _IDX < MOD_TOTAL )) && printf "%-*s" "$MOD_CW" "${AVAILABLE_MODULES[$_IDX]}"
+        done
+        echo
     done
 
     echo
     echo "==============================================================================="
     echo "AVAILABLE SUITES"
     echo "==============================================================================="
-
+    echo
     for SUITE in "${AVAILABLE_SUITES[@]}"
     do
-        printf "    %-20s\n" "$SUITE"
+        printf "    %s\n" "$SUITE"
     done
 
     echo
@@ -313,102 +359,143 @@ show_help()
     echo "OPTIONS"
     echo "==============================================================================="
     echo
-    printf "    %-28s %s\n" "-h, --help"          "Show this help message"
-    printf "    %-28s %s\n" "-l, --loop"          "Run continuously until Ctrl+C"
-    printf "    %-28s %s\n" "--logger MODE"       "Logger output mode"
-    printf "    %-28s %s\n" "--testlog MODE"      "Test log output mode"
-    printf "    %-28s %s\n" "--csv"               "Enable CSV report generation"
-    printf "    %-28s %s\n" "--csv <file>"        "Custom CSV report filename"
-    printf "    %-28s %s\n" "--version"           "Show framework version"
+    printf "    %-30s %s\n" "-h, --help"           "Show this help message"
+    printf "    %-30s %s\n" "--version"            "Show framework version"
+    echo
+    printf "    %-30s %s\n" "-l, --loop"           "Run loop continuously until Ctrl+C (infinite)"
+    printf "    %-30s %s\n" "--duration MINUTES"   "Run loop for N minutes then stop (requires --loop)"
+    echo
+    printf "    %-30s %s\n" "--logger MODE"        "Logger output mode  (default: console)"
+    printf "    %-30s %s\n" "--testlog MODE"       "Test log output mode  (default: console)"
+    echo
+    printf "    %-30s %s\n" "--csv"                "Enable CSV report (auto-named csv/<module>.csv)"
+    printf "    %-30s %s\n" "--csv <file>"         "Enable CSV report with custom filename"
     echo
 
     echo "==============================================================================="
-    echo "LOGGER MODES"
+    echo "LOGGER MODES  (--logger)"
     echo "==============================================================================="
     echo
-    printf "    %-15s %s\n" "console" "Print logger messages to console"
-    printf "    %-15s %s\n" "file"    "Write logger messages to log file"
-    printf "    %-15s %s\n" "both"    "Print to console and log file"
+    printf "    %-10s %s\n" "none"    "Suppress all logger output"
+    printf "    %-10s %s\n" "console" "Print [INFO]/[PASS]/[FAIL]/[WARN] to console  (default)"
+    printf "    %-10s %s\n" "file"    "Write logger messages to logs/<module>.log"
+    printf "    %-10s %s\n" "both"    "Print to console and write to log file"
     echo
 
     echo "==============================================================================="
-    echo "TEST LOG MODES"
+    echo "TEST LOG MODES  (--testlog)"
     echo "==============================================================================="
     echo
-    printf "    %-15s %s\n" "console" "Print command/test logs to console"
-    printf "    %-15s %s\n" "file"    "Write command/test logs to log file"
-    printf "    %-15s %s\n" "both"    "Print to console and log file"
-    printf "    %-15s %s\n" "none"    "Disable command/test logs"
+    printf "    %-10s %s\n" "none"    "Disable all test/command logs"
+    printf "    %-10s %s\n" "console" "Print command output and test details to console  (default)"
+    printf "    %-10s %s\n" "file"    "Write command output and test details to logs/<module>.log"
+    printf "    %-10s %s\n" "both"    "Print to console and write to log file"
+    echo
+
+    echo "==============================================================================="
+    echo "LOG & CSV FILES"
+    echo "==============================================================================="
+    echo
+    echo "  Log files  : logs/<module>.log   — one file per module, appended across runs"
+    echo "  CSV files  : csv/<module>.csv    — one file per module, appended across runs"
+    echo
+    echo "  Log file is created automatically when --logger or --testlog is set to"
+    echo "  'file' or 'both'."
+    echo
+    echo "  CSV file is created only when --csv is specified."
+    echo "  When --csv <file> is given, all modules write to that single custom file."
+    echo
+    echo "  Each run appends a timestamped separator to the log file:"
+    echo "      # RUN START : 2026-08-20 18:00:00  |  Module: ethernet"
+    echo
+
+    echo "==============================================================================="
+    echo "INTERACTIVE MENU"
+    echo "==============================================================================="
+    echo
+    echo "  Run with no arguments to open the interactive menu:"
+    echo "      ./validate.sh"
+    echo
+    echo "  Features:"
+    echo "    • Dynamic 2 or 3-column layout (3 columns when ≥ 20 modules)"
+    echo "    • Number-based selection — enter one or more numbers separated by spaces"
+    echo "    • Run ALL modules with a single entry"
+    echo "    • Single run or timed loop mode per selection"
+    echo "    • Confirmation prompt before execution"
+    echo "    • Ctrl+C during loop prints grand summary and returns to menu"
     echo
 
     echo "==============================================================================="
     echo "EXAMPLES"
     echo "==============================================================================="
     echo
-    echo "Run a single module:"
-    echo "    ./validate.sh cpu"
+    echo "  --- Interactive ---"
     echo
-    echo "Run multiple modules:"
-    echo "    ./validate.sh cpu ddr ethernet"
+    echo "  Open interactive menu:"
+    echo "      ./validate.sh"
     echo
-    echo "Run a suite:"
-    echo "    ./validate.sh networking"
+    echo "  --- Single run ---"
     echo
-    echo "Run multiple suites:"
-    echo "    ./validate.sh networking storage"
+    echo "  Run one module (console output only):"
+    echo "      ./validate.sh cpu"
     echo
-    echo "Enable continuous execution:"
-    echo "    ./validate.sh cpu --loop"
+    echo "  Run multiple modules:"
+    echo "      ./validate.sh cpu ethernet gpio"
     echo
-    echo "Enable logger to console only:"
-    echo "    ./validate.sh cpu --logger console"
+    echo "  Run a suite:"
+    echo "      ./validate.sh networking"
     echo
-    echo "Enable logger to file:"
-    echo "    ./validate.sh cpu --logger file"
+    echo "  Run all modules:"
+    echo "      ./validate.sh all"
     echo
-    echo "Enable logger to both:"
-    echo "    ./validate.sh cpu --logger both"
+    echo "  --- Logging ---"
     echo
-    echo "Print test logs to console:"
-    echo "    ./validate.sh cpu --testlog console"
+    echo "  Save logger and test logs to file:"
+    echo "      ./validate.sh cpu --logger file --testlog file"
+    echo "      # writes to logs/cpu.log"
     echo
-    echo "Store test logs to file:"
-    echo "    ./validate.sh cpu --testlog file"
+    echo "  Log to both console and file:"
+    echo "      ./validate.sh cpu --logger both --testlog both"
     echo
-    echo "Print and store test logs:"
-    echo "    ./validate.sh cpu --testlog both"
+    echo "  Suppress all output (silent run):"
+    echo "      ./validate.sh cpu --logger none --testlog none"
     echo
-    echo "Disable test logs:"
-    echo "    ./validate.sh cpu --testlog none"
+    echo "  --- CSV reports ---"
     echo
-    echo "Generate CSV report:"
-    echo "    ./validate.sh cpu --csv"
+    echo "  Auto-named CSV per module:"
+    echo "      ./validate.sh cpu --csv"
+    echo "      # writes to csv/cpu.csv"
     echo
-    echo "Generate custom CSV report:"
-    echo "    ./validate.sh cpu --csv cpu_report.csv"
+    echo "  Custom CSV filename (all modules share one file):"
+    echo "      ./validate.sh cpu ethernet --csv my_report.csv"
     echo
-    echo "Run full validation:"
-    echo "    ./validate.sh full_validation"
+    echo "  --- Loop mode ---"
     echo
-    echo "Combined example:"
-    echo "    ./validate.sh cpu ddr --logger both --testlog file --csv --loop"
+    echo "  Infinite loop (stop with Ctrl+C):"
+    echo "      ./validate.sh cpu --loop"
     echo
-    echo "Run all modules:"
-    echo "    ./validate.sh all"
+    echo "  Timed loop — run for 10 minutes then stop:"
+    echo "      ./validate.sh cpu --loop --duration 10"
     echo
+    echo "  Loop with CSV report:"
+    echo "      ./validate.sh cpu --loop --duration 5 --csv"
+    echo
+    echo "  --- Combined ---"
+    echo
+    echo "  Multi-module, timed loop, full logging:"
+    echo "      ./validate.sh cpu ethernet --loop --duration 30 --logger both --testlog file --csv"
+    echo
+
     echo "==============================================================================="
     echo "NOTES"
     echo "==============================================================================="
     echo
     echo "  • Modules are loaded automatically from the modules/ directory."
     echo "  • Suites are loaded automatically from the suites/ directory."
-    echo "  • Log file creation is automatically enabled when:"
-    echo "        --logger file"
-    echo "        --logger both"
-    echo "        --testlog file"
-    echo "        --testlog both"
-    echo "  • CSV report generation is enabled only when '--csv' is specified."
-    echo "  • Press Ctrl+C to stop loop mode."
+    echo "  • Modules and Suites cannot be mixed in the same invocation."
+    echo "  • --duration without --loop has no effect."
+    echo "  • In loop mode, log files are not written (CSV only)."
+    echo "  • Press Ctrl+C at any time during loop mode to stop and see the summary."
     echo
     echo "==============================================================================="
     echo
@@ -454,6 +541,23 @@ parse_arguments()
             -l|--loop)
 
                 parse_loop
+                ;;
+
+            ###################################################################
+            # Loop Duration
+            ###################################################################
+
+            --duration)
+
+                shift
+
+                [ $# -eq 0 ] && \
+                {
+                    echo "ERROR : Missing duration value (minutes)."
+                    exit 1
+                }
+
+                parse_duration "$1"
                 ;;
 
             ###################################################################

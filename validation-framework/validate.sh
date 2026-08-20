@@ -42,6 +42,38 @@ run_single_module()
         return 1
     fi
 
+    # ------------------------------------------------------------------ #
+    # Per-module log/CSV paths.
+    # Each module appends to its own file across runs:
+    #   logs/<module>.log
+    #   csv/<module>.csv
+    # Directories already exist (created by initialize_framework).
+    # ------------------------------------------------------------------ #
+    if [ "$LOG_FILE_ENABLE" -eq 1 ]
+    then
+        LOG_FILE="${LOG_DIR}/${MODULE}.log"
+        touch "$LOG_FILE"
+    fi
+
+    if [ "$CSV_REPORT_ENABLE" -eq 1 ] && [ -z "${CSV_FILE_OVERRIDE:-}" ]
+    then
+        CSV_FILE="${CSV_DIR}/${MODULE}.csv"
+        touch "$CSV_FILE"
+        csv_create_header
+    fi
+
+    # ------------------------------------------------------------------ #
+    # Run-start separator in the log file — makes it easy to identify
+    # individual runs when the file accumulates across multiple executions.
+    # ------------------------------------------------------------------ #
+    if [ "$LOG_FILE_ENABLE" -eq 1 ] && [ -n "$LOG_FILE" ]
+    then
+        printf '\n################################################################################\n' >> "$LOG_FILE"
+        printf '# RUN START : %s  |  Module: %s\n' \
+            "$(date '+%Y-%m-%d %H:%M:%S')" "$MODULE"          >> "$LOG_FILE"
+        printf '################################################################################\n\n' >> "$LOG_FILE"
+    fi
+
     log_info ""
     log_info "Running Module : ${MODULE}"
 
@@ -174,9 +206,14 @@ discover_menu_modules()
 ###############################################################################
 # print_main_menu
 #
-# Displays the two-column module list.
-# SELECTED_NUMS[] is an array of 1-based numbers already chosen in this
-# session; chosen entries are marked with [*] so the user can track picks.
+# Displays a dynamic 2- or 3-column module list.
+#
+# Layout rules:
+#   < 20 modules  ->  2 columns
+#   >= 20 modules ->  3 columns
+#
+# Column width is auto-sized to the longest module name + 2 padding chars,
+# so names never overlap regardless of how many modules are present.
 ###############################################################################
 
 print_main_menu()
@@ -184,35 +221,80 @@ print_main_menu()
     local TOTAL=${#MENU_MODULES[@]}
     local ALL_OPT=$(( TOTAL + 1 ))
 
-    #clear
-    echo "=========================================================================="
-    echo "            EMBEDDED LINUX VALIDATION - TEST MENU"
-    echo "=========================================================================="
+    # ------------------------------------------------------------------ #
+    # Determine number of columns and rows
+    # ------------------------------------------------------------------ #
+    local COLS
+    if (( TOTAL >= 20 ))
+    then
+        COLS=3
+    else
+        COLS=2
+    fi
 
-    local HALF=$(( (TOTAL + 1) / 2 ))
-    local i
-    for (( i=0; i<HALF; i++ ))
+    local ROWS=$(( (TOTAL + COLS - 1) / COLS ))   # ceiling division
+
+    # ------------------------------------------------------------------ #
+    # Auto-size column width: longest module name + 2 chars padding
+    # ------------------------------------------------------------------ #
+    local MAX_LEN=0
+    local M
+    for M in "${MENU_MODULES[@]}"
     do
-        local L=$i
-        local R=$(( i + HALF ))
-        local LN=$(( L + 1 ))
-        local LV="${MENU_MODULES[$L]}"
+        (( ${#M} > MAX_LEN )) && MAX_LEN=${#M}
+    done
+    local COL_WIDTH=$(( MAX_LEN + 2 ))
 
-        if (( R < TOTAL ))
-        then
-            local RN=$(( R + 1 ))
-            local RV="${MENU_MODULES[$R]}"
-            printf "  %2d. %-28s  %2d. %s\n" "$LN" "$LV" "$RN" "$RV"
-        else
-            printf "  %2d. %s\n" "$LN" "$LV"
-        fi
+    # Number prefix width: "  XX. " = 6 chars for up to 99 modules
+    # Total width per column = 6 + COL_WIDTH + 2 (gap between columns)
+    local ENTRY_WIDTH=$(( 6 + COL_WIDTH ))
+
+    # Calculate total line width for the border
+    local BORDER_WIDTH=$(( ENTRY_WIDTH * COLS + 2 ))
+    (( BORDER_WIDTH < 74 )) && BORDER_WIDTH=74   # minimum width
+
+    local BORDER
+    BORDER=$(printf '%*s' "$BORDER_WIDTH" '' | tr ' ' '=')
+    local DIVIDER
+    DIVIDER=$(printf '%*s' "$BORDER_WIDTH" '' | tr ' ' '-')
+
+    # ------------------------------------------------------------------ #
+    # Print header
+    # ------------------------------------------------------------------ #
+    echo "$BORDER"
+    printf "%*s\n" "$(( (BORDER_WIDTH + 44) / 2 ))" \
+        "EMBEDDED LINUX VALIDATION - TEST MENU"
+    echo "$BORDER"
+
+    # ------------------------------------------------------------------ #
+    # Print module rows
+    # ------------------------------------------------------------------ #
+    local ROW COL IDX
+    for (( ROW=0; ROW<ROWS; ROW++ ))
+    do
+        printf "  "
+        for (( COL=0; COL<COLS; COL++ ))
+        do
+            # Column-major order: index = COL*ROWS + ROW
+            IDX=$(( COL * ROWS + ROW ))
+            if (( IDX < TOTAL ))
+            then
+                local NUM=$(( IDX + 1 ))
+                local NAME="${MENU_MODULES[$IDX]}"
+                printf "%2d. %-*s  " "$NUM" "$COL_WIDTH" "$NAME"
+            fi
+        done
+        echo
     done
 
-    echo "--------------------------------------------------------------------------"
+    # ------------------------------------------------------------------ #
+    # Footer
+    # ------------------------------------------------------------------ #
+    echo "$DIVIDER"
     printf "  %2d. Run ALL modules  (runs individually, select alone)\n" "$ALL_OPT"
-    echo "--------------------------------------------------------------------------"
+    echo "$DIVIDER"
     echo "   0. Exit"
-    echo "=========================================================================="
+    echo "$BORDER"
     echo "  Enter one or more numbers separated by spaces (e.g. 1 3 7)."
     printf "  Select [0-%d]: " "$ALL_OPT"
 }
@@ -438,13 +520,12 @@ interactive_run_loop()
     mkdir -p "$LOG_DIR"
 
     # One shared CSV per module for the entire loop session.
-    # csv_create_header() is called by setup_log_files inside the subprocess;
-    # the [ -s ] guard ensures the header is written only once.
+    # csv_create_header() guards the header — written only once per file.
     declare -A MOD_CSV
     local MOD
     for MOD in "${MODS[@]}"
     do
-        MOD_CSV["$MOD"]="${LOG_DIR}/validation_${SESSION_TS}_${MOD}_loop.csv"
+        MOD_CSV["$MOD"]="${CSV_DIR}/${MOD}.csv"
     done
 
     echo ""
@@ -458,7 +539,7 @@ interactive_run_loop()
     do
         printf "  CSV        : %s\n" "${MOD_CSV[$MOD]}"
     done
-    echo "  Ctrl+C to stop early"
+    echo "  Ctrl+C to stop early and print summary"
     echo "=========================================================================="
 
     # Grand totals across all iterations
@@ -472,7 +553,60 @@ interactive_run_loop()
         GRAND_SKIP["$MOD"]=0
     done
 
-    while (( $(date +%s) < END_TIME ))
+    # ------------------------------------------------------------------ #
+    # _loop_summary — prints the grand totals table.
+    # Defined as a nested function so both the normal exit path and the
+    # SIGINT handler can call it without duplicating code.
+    # ------------------------------------------------------------------ #
+    _loop_summary()
+    {
+        echo ""
+        echo "=========================================================================="
+        printf "  LOOP SUMMARY  (%d iteration(s), %d module(s))\n" "$ITER" "$MOD_COUNT"
+        echo "=========================================================================="
+        local _TOTAL_P=0 _TOTAL_F=0 _TOTAL_S=0
+        local _M
+        for _M in "${MODS[@]}"
+        do
+            printf "  %-25s  PASS: %d  FAIL: %d  SKIP: %d\n" \
+                "$_M" "${GRAND_PASS[$_M]}" "${GRAND_FAIL[$_M]}" "${GRAND_SKIP[$_M]}"
+            (( _TOTAL_P += GRAND_PASS[$_M] ))
+            (( _TOTAL_F += GRAND_FAIL[$_M] ))
+            (( _TOTAL_S += GRAND_SKIP[$_M] ))
+        done
+        echo "  ----------------------------------------------------------"
+        printf "  %-25s  PASS: %d  FAIL: %d  SKIP: %d\n" \
+            "TOTAL" "$_TOTAL_P" "$_TOTAL_F" "$_TOTAL_S"
+        echo ""
+        echo "  CSV report(s):"
+        for _M in "${MODS[@]}"
+        do
+            printf "  %-25s  %s\n" "$_M" "${MOD_CSV[$_M]}"
+        done
+        echo "=========================================================================="
+    }
+
+    # ------------------------------------------------------------------ #
+    # SIGINT handler — Ctrl+C during the loop prints the grand summary
+    # and returns cleanly to the interactive menu (does not exit the
+    # whole framework process).
+    # ------------------------------------------------------------------ #
+    _loop_sigint()
+    {
+        echo ""
+        echo ""
+        echo "  [!] Interrupted after iteration ${ITER}."
+        _loop_summary
+        # Restore default SIGINT so the menu is not also trapped
+        trap - SIGINT
+        # Use a flag to break the while loop instead of exit
+        _LOOP_INTERRUPTED=1
+    }
+
+    _LOOP_INTERRUPTED=0
+    trap '_loop_sigint' SIGINT
+
+    while (( $(date +%s) < END_TIME )) && [ "$_LOOP_INTERRUPTED" -eq 0 ]
     do
         (( ITER++ ))
         local REM=$(( END_TIME - $(date +%s) ))
@@ -537,12 +671,10 @@ interactive_run_loop()
 
                 if [ "$NEW_ROWS" -gt 0 ]
                 then
-                    # Read only the new rows (skip header + previously existing rows)
-                    local SKIP_LINES=$(( ${PRE_COUNT[$MOD]} + 1 ))
                     local NEW_DATA
                     NEW_DATA=$(tail -n "$NEW_ROWS" "$CSV")
-                    P=$(echo "$NEW_DATA" | grep -c ',"PASS",'  || true)
-                    F=$(echo "$NEW_DATA" | grep -c ',"FAIL",'  || true)
+                    P=$(echo "$NEW_DATA" | grep -c ',"PASS",'    || true)
+                    F=$(echo "$NEW_DATA" | grep -c ',"FAIL",'    || true)
                     S=$(echo "$NEW_DATA" | grep -c ',"SKIPPED",' || true)
                 fi
             fi
@@ -555,38 +687,20 @@ interactive_run_loop()
                 "$MOD" "$P" "$F" "$S"
         done
 
-        # Delay before next iteration
-        if (( $(date +%s) < END_TIME ))
+        # Delay before next iteration (interruptible)
+        if (( $(date +%s) < END_TIME )) && [ "$_LOOP_INTERRUPTED" -eq 0 ]
         then
             printf "\n  Waiting %ds before next iteration...\n" "$DELAY"
-            sleep "$DELAY"
+            sleep "$DELAY" &
+            wait $! 2>/dev/null || true
         fi
     done
 
-    # Final summary
-    echo ""
-    echo "=========================================================================="
-    printf "  LOOP SUMMARY  (%d iteration(s), %d module(s))\n" "$ITER" "$MOD_COUNT"
-    echo "=========================================================================="
-    local TOTAL_P=0 TOTAL_F=0 TOTAL_S=0
-    for MOD in "${MODS[@]}"
-    do
-        printf "  %-25s  PASS: %d  FAIL: %d  SKIP: %d\n" \
-            "$MOD" "${GRAND_PASS[$MOD]}" "${GRAND_FAIL[$MOD]}" "${GRAND_SKIP[$MOD]}"
-        (( TOTAL_P += GRAND_PASS[$MOD] ))
-        (( TOTAL_F += GRAND_FAIL[$MOD] ))
-        (( TOTAL_S += GRAND_SKIP[$MOD] ))
-    done
-    echo "  ----------------------------------------------------------"
-    printf "  %-25s  PASS: %d  FAIL: %d  SKIP: %d\n" \
-        "TOTAL" "$TOTAL_P" "$TOTAL_F" "$TOTAL_S"
-    echo ""
-    echo "  CSV report(s):"
-    for MOD in "${MODS[@]}"
-    do
-        printf "  %-25s  %s\n" "$MOD" "${MOD_CSV[$MOD]}"
-    done
-    echo "=========================================================================="
+    # Restore SIGINT to default before returning to the menu
+    trap - SIGINT
+
+    # Print summary only on clean (non-interrupted) exit
+    [ "$_LOOP_INTERRUPTED" -eq 0 ] && _loop_summary
 }
 
 ###############################################################################
@@ -615,7 +729,52 @@ run_selection()
     if [ "$EXEC_MODE" = "loop" ]
     then
         ask_duration
-        # Pass duration + all module names to the unified loop function
+    fi
+
+    # ------------------------------------------------------------------ #
+    # Confirmation prompt — show exactly what will run before committing.
+    # ------------------------------------------------------------------ #
+    echo ""
+    echo "  =========================================================="
+    echo "  Confirm Execution"
+    echo "  =========================================================="
+    if [ "$COUNT" -eq 1 ]
+    then
+        printf "  Module    : %s\n" "${_MODS[0]}"
+    else
+        printf "  Modules   : %s\n" "${_MODS[*]}"
+        printf "  Count     : %d\n" "$COUNT"
+    fi
+    if [ "$EXEC_MODE" = "loop" ]
+    then
+        printf "  Mode      : Loop (%ds / %d iterations est.)\n" \
+            "$DURATION_SECS" "$(( DURATION_SECS / (ITER_DELAY_SECS + 1) ))"
+        printf "  Delay     : %ds between iterations\n" "$ITER_DELAY_SECS"
+    else
+        printf "  Mode      : Single run\n"
+    fi
+    echo "  =========================================================="
+    printf "  Proceed? [y/N]: "
+    read -r _CONFIRM
+
+    case "$_CONFIRM" in
+        y|Y|yes|YES)
+            ;;
+        *)
+            echo ""
+            echo "  Cancelled. Returning to menu."
+            echo ""
+            printf "  Press [Enter] to return to the menu..."
+            read -r
+            return
+            ;;
+    esac
+
+    # ------------------------------------------------------------------ #
+    # Execute
+    # ------------------------------------------------------------------ #
+    if [ "$EXEC_MODE" = "loop" ]
+    then
         interactive_run_loop "$DURATION_SECS" "${_MODS[@]}"
     else
         # Single mode - sequential, one module at a time
@@ -788,11 +947,61 @@ else
     # Determine loop mode (set by parse_arguments via parse_loop)
     if [ "$LOOP_MODE" -eq 1 ]
     then
-        while true
+        # ------------------------------------------------------------------ #
+        # Loop mode — timed or infinite.
+        #
+        # LOOP_DURATION_SECS == 0  : infinite, stop on Ctrl+C
+        # LOOP_DURATION_SECS  > 0  : timed, stop when duration expires
+        #
+        # Ctrl+C always prints a final summary before exiting.
+        # ------------------------------------------------------------------ #
+
+        local _CLI_ITER=0
+        local _CLI_INTERRUPTED=0
+        local _CLI_END_TIME=0
+
+        if [ "$LOOP_DURATION_SECS" -gt 0 ]
+        then
+            _CLI_END_TIME=$(( $(date +%s) + LOOP_DURATION_SECS ))
+            log_info "Loop mode : timed (${LOOP_DURATION_SECS}s)"
+        else
+            log_info "Loop mode : infinite (Ctrl+C to stop)"
+        fi
+
+        # Ctrl+C handler — print summary and exit
+        _cli_loop_sigint()
+        {
+            echo ""
+            echo ""
+            log_info "Loop interrupted after ${_CLI_ITER} iteration(s)."
+            print_summary
+            trap - SIGINT
+            _CLI_INTERRUPTED=1
+        }
+        trap '_cli_loop_sigint' SIGINT
+
+        while [ "$_CLI_INTERRUPTED" -eq 0 ]
         do
+            # Timed mode: check if duration has expired
+            if [ "$LOOP_DURATION_SECS" -gt 0 ] && \
+               (( $(date +%s) >= _CLI_END_TIME ))
+            then
+                break
+            fi
+
+            (( _CLI_ITER++ ))
             execute_validation
-            sleep 2
+            sleep 2 & wait $! 2>/dev/null || true
         done
+
+        trap - SIGINT
+
+        # Print summary on clean (timed) exit; handler already printed on Ctrl+C
+        if [ "$_CLI_INTERRUPTED" -eq 0 ]
+        then
+            log_info "Loop completed after ${_CLI_ITER} iteration(s)."
+            print_summary
+        fi
     else
         execute_validation
         print_summary
