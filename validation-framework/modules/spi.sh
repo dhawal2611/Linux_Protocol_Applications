@@ -31,22 +31,6 @@ SPI_PRIMARY_DEVICE="/dev/spidev0.0"
 SPI_DISCOVERY_DONE=0
 
 ###############################################################################
-# Configuration Defaults
-#
-# These values can be overridden from config.sh.
-###############################################################################
-
-SPI_DEVICE="${SPI_DEVICE:-/dev/spidev0.0}"
-
-SPI_DEFAULT_SPEED="${SPI_DEFAULT_SPEED:-500000}"
-SPI_TEST_SPEED="${SPI_TEST_SPEED:-1000000}"
-SPI_HIGH_SPEED="${SPI_HIGH_SPEED:-10000000}"
-
-SPI_TRANSFER_DATA="${SPI_TRANSFER_DATA:-12345678}"
-
-SPI_STABILITY_LOOPS="${SPI_STABILITY_LOOPS:-100}"
-
-###############################################################################
 # Required Commands
 ###############################################################################
 

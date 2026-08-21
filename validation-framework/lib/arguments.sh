@@ -743,4 +743,21 @@ parse_arguments()
         LOG_FILE_ENABLE=1
 
     fi
+
+    ###########################################################################
+    # Set Initial Log File Path
+    #
+    # LOG_FILE must be non-empty before initialize_framework() calls any
+    # log_* functions, otherwise the ">>" redirect expands to ">>" with no
+    # filename and produces:
+    #   logger.sh: line N: : No such file or directory
+    #
+    # run_single_module() will later override this with a per-module path
+    # (logs/<module>.log) before running each module.
+    ###########################################################################
+
+    if [ "$LOG_FILE_ENABLE" -eq 1 ] && [ -z "$LOG_FILE" ]
+    then
+        LOG_FILE="${LOG_DIR}/${LOG_TARGET}.log"
+    fi
 }

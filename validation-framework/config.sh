@@ -280,6 +280,90 @@ GPIO_DISCOVERY_DONE=0
 GPIO_SYSFS_BASE="/sys/class/gpio"
 
 ###############################################################################
+# SPI NOR Runtime Configuration
+###############################################################################
+
+SPINOR_DEVICE="${SPINOR_DEVICE:-/dev/mtd0}"
+SPINOR_MTD_NAME=""
+
+###############################################################################
+# Configuration Defaults
+#
+# These values can be overridden from config.sh.
+###############################################################################
+
+UART_DEVICE="${UART_DEVICE:-/dev/ttyUSB1}"
+
+UART_BAUDRATE="${UART_BAUDRATE:-115200}"
+UART_HIGH_SPEED="${UART_HIGH_SPEED:-921600}"
+
+UART_DATABITS="${UART_DATABITS:-8}"
+UART_PARITY="${UART_PARITY:-none}"
+UART_STOPBITS="${UART_STOPBITS:-1}"
+
+UART_TEST_DATA="${UART_TEST_DATA:-UART_TEST_12345}"
+
+UART_STABILITY_ITERATIONS="${UART_STABILITY_ITERATIONS:-100}"
+UART_RX_TIMEOUT="${UART_RX_TIMEOUT:-2}"
+
+###############################################################################
+# Configuration Defaults
+#
+# These values can be overridden from config.sh.
+###############################################################################
+
+SPI_DEVICE="${SPI_DEVICE:-/dev/spidev0.0}"
+
+SPI_DEFAULT_SPEED="${SPI_DEFAULT_SPEED:-500000}"
+SPI_TEST_SPEED="${SPI_TEST_SPEED:-1000000}"
+SPI_HIGH_SPEED="${SPI_HIGH_SPEED:-10000000}"
+
+SPI_TRANSFER_DATA="${SPI_TRANSFER_DATA:-12345678}"
+
+SPI_STABILITY_LOOPS="${SPI_STABILITY_LOOPS:-100}"
+
+###############################################################################
+# Configuration Defaults
+###############################################################################
+
+#
+# Generic I2C device
+#
+I2C_GENERIC_BUS="${I2C_GENERIC_BUS:-1}"
+I2C_GENERIC_ADDRESS="${I2C_GENERIC_ADDRESS:-0x38}"
+
+#
+# Generic read/write configuration
+#
+I2C_GENERIC_WRITE_REGISTER="${I2C_GENERIC_WRITE_REGISTER:-0x00}"
+I2C_GENERIC_WRITE_VALUE="${I2C_GENERIC_WRITE_VALUE:-0x12}"
+I2C_GENERIC_READ_REGISTER="${I2C_GENERIC_READ_REGISTER:-0x00}"
+
+#
+# Configured generic devices.
+#
+# Format:
+#
+#   BUS:ADDRESS
+#
+# Example:
+#
+#   I2C_GENERIC_DEVICES=(
+#       "1:0x38"
+#       "1:0x60"
+#   )
+#
+
+if [ -z "${I2C_GENERIC_DEVICES+x}" ]
+then
+    I2C_GENERIC_DEVICES=(
+        "1:0x38"
+    )
+fi
+
+
+
+###############################################################################
 # Ethernet Configuration
 #
 # These variables should preferably be defined in config.sh

@@ -8,26 +8,6 @@ MODULE_NAME="UART"
 MODULE_DESCRIPTION="UART Peripheral Validation"
 
 ###############################################################################
-# Configuration Defaults
-#
-# These values can be overridden from config.sh.
-###############################################################################
-
-UART_DEVICE="${UART_DEVICE:-/dev/ttyUSB1}"
-
-UART_BAUDRATE="${UART_BAUDRATE:-115200}"
-UART_HIGH_SPEED="${UART_HIGH_SPEED:-921600}"
-
-UART_DATABITS="${UART_DATABITS:-8}"
-UART_PARITY="${UART_PARITY:-none}"
-UART_STOPBITS="${UART_STOPBITS:-1}"
-
-UART_TEST_DATA="${UART_TEST_DATA:-UART_TEST_12345}"
-
-UART_STABILITY_ITERATIONS="${UART_STABILITY_ITERATIONS:-100}"
-UART_RX_TIMEOUT="${UART_RX_TIMEOUT:-2}"
-
-###############################################################################
 # Runtime Directory
 #
 # Discovery information is stored here because run_command may execute
@@ -35,13 +15,16 @@ UART_RX_TIMEOUT="${UART_RX_TIMEOUT:-2}"
 #
 # Example:
 #
-# .uart_runtime/
+# runtime/uart/
 # ├── discovered_devices
 # └── uart_rx_<pid>.tmp
 #
 ###############################################################################
 
-UART_RUNTIME_DIR="${UART_RUNTIME_DIR:-$(pwd)/.uart_runtime}"
+_UART_MODULE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+_UART_FRAMEWORK_DIR="$(cd "${_UART_MODULE_DIR}/.." && pwd)"
+
+UART_RUNTIME_DIR="${UART_RUNTIME_DIR:-${_UART_FRAMEWORK_DIR}/runtime/uart}"
 
 UART_DISCOVERY_FILE="${UART_RUNTIME_DIR}/discovered_devices"
 

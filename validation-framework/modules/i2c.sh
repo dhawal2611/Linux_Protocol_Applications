@@ -38,45 +38,6 @@ REQUIRED_COMMANDS=(
 )
 
 ###############################################################################
-# Configuration Defaults
-###############################################################################
-
-#
-# Generic I2C device
-#
-I2C_GENERIC_BUS="${I2C_GENERIC_BUS:-1}"
-I2C_GENERIC_ADDRESS="${I2C_GENERIC_ADDRESS:-0x38}"
-
-#
-# Generic read/write configuration
-#
-I2C_GENERIC_WRITE_REGISTER="${I2C_GENERIC_WRITE_REGISTER:-0x00}"
-I2C_GENERIC_WRITE_VALUE="${I2C_GENERIC_WRITE_VALUE:-0x12}"
-I2C_GENERIC_READ_REGISTER="${I2C_GENERIC_READ_REGISTER:-0x00}"
-
-#
-# Configured generic devices.
-#
-# Format:
-#
-#   BUS:ADDRESS
-#
-# Example:
-#
-#   I2C_GENERIC_DEVICES=(
-#       "1:0x38"
-#       "1:0x60"
-#   )
-#
-
-if [ -z "${I2C_GENERIC_DEVICES+x}" ]
-then
-    I2C_GENERIC_DEVICES=(
-        "1:0x38"
-    )
-fi
-
-###############################################################################
 # Runtime Directory
 ###############################################################################
 
