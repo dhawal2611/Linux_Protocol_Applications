@@ -61,8 +61,8 @@ write_logger()
             ;;
 
         none)
-            # Suppress all logger output — used in loop mode subprocesses
-            # where only CSV is written.
+            # No file output — fall back to console so messages are not lost.
+            echo -e "${COLOR}${PREFIX}${NC} ${MESSAGE}"
             ;;
 
         *)
@@ -241,11 +241,6 @@ write_test_log()
 {
     local DATA="$1"
 
-    #
-    # Logging Disabled
-    #
-    [ "$LOG_FILE_ENABLE" -eq 0 ] && return
-
     case "$TEST_LOG_OUTPUT_MODE" in
 
         console)
@@ -255,18 +250,20 @@ write_test_log()
 
         file)
 
-            printf "%s\n" "$DATA" >> "$LOG_FILE"
+            [ "$LOG_FILE_ENABLE" -eq 1 ] && \
+                printf "%s\n" "$DATA" >> "$LOG_FILE"
             ;;
 
         both)
 
             printf "%s\n" "$DATA"
 
-            printf "%s\n" "$DATA" >> "$LOG_FILE"
+            [ "$LOG_FILE_ENABLE" -eq 1 ] && \
+                printf "%s\n" "$DATA" >> "$LOG_FILE"
             ;;
 
         none)
-	    printf "%s\n" "$DATA"
+            # Suppress all test log output.
             ;;
 
     esac

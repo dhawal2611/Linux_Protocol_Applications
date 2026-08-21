@@ -55,10 +55,13 @@ run_single_module()
         touch "$LOG_FILE"
     fi
 
-    if [ "$CSV_REPORT_ENABLE" -eq 1 ] && [ -z "${CSV_FILE_OVERRIDE:-}" ]
+    if [ "$CSV_REPORT_ENABLE" -eq 1 ]
     then
-        CSV_FILE="${CSV_DIR}/${MODULE}.csv"
-        touch "$CSV_FILE"
+        if [ -z "${CSV_FILE_OVERRIDE:-}" ]
+        then
+            CSV_FILE="${CSV_DIR}/${MODULE}.csv"
+            touch "$CSV_FILE"
+        fi
         csv_create_header
     fi
 
@@ -447,6 +450,179 @@ ask_duration()
 }
 
 ###############################################################################
+# ask_output_options <module1> [module2] ...
+#
+# Interactively asks the user how they want logger output, test log output,
+# and whether to generate a CSV report.
+# Then checks for any existing log/CSV files for the selected modules and
+# asks whether to delete them or continue appending.
+#
+# Sets:
+#   LOGGER_OUTPUT_MODE     - console | file | both | none
+#   TEST_LOG_OUTPUT_MODE   - console | file | both | none
+#   LOG_FILE_ENABLE        - 0 | 1
+#   CSV_REPORT_ENABLE      - 0 | 1
+###############################################################################
+
+ask_output_options()
+{
+    local _OMODS=("$@")
+
+    echo ""
+    echo "  -------------------------------------------------------"
+    echo "  Output Options"
+    echo "  -------------------------------------------------------"
+
+    # ---- Logger output mode ------------------------------------------ #
+    echo "  Logger output  (INFO/PASS/FAIL messages):"
+    echo "    1. console  - terminal only"
+    echo "    2. file     - log file only"
+    echo "    3. both     - terminal and log file"
+    echo "    4. none     - no file, console only (same as console)"
+    printf "  Choose [1-4, default: 1]: "
+    read -r _LOPT
+    case "$_LOPT" in
+        2) LOGGER_OUTPUT_MODE="file"    ; LOG_FILE_ENABLE=1 ;;
+        3) LOGGER_OUTPUT_MODE="both"    ; LOG_FILE_ENABLE=1 ;;
+        4) LOGGER_OUTPUT_MODE="none"    ; LOG_FILE_ENABLE=0 ;;
+        *) LOGGER_OUTPUT_MODE="console" ; LOG_FILE_ENABLE=0 ;;
+    esac
+    echo "  -> Logger output : ${LOGGER_OUTPUT_MODE}"
+
+    # ---- Test log output mode ---------------------------------------- #
+    echo ""
+    echo "  Test log output  (command output / test detail):"
+    echo "    1. console  - terminal only"
+    echo "    2. file     - log file only"
+    echo "    3. both     - terminal and log file"
+    echo "    4. none     - suppress test logs"
+    printf "  Choose [1-4, default: 1]: "
+    read -r _TOPT
+    case "$_TOPT" in
+        2) TEST_LOG_OUTPUT_MODE="file"    ; LOG_FILE_ENABLE=1 ;;
+        3) TEST_LOG_OUTPUT_MODE="both"    ; LOG_FILE_ENABLE=1 ;;
+        4) TEST_LOG_OUTPUT_MODE="none"                        ;;
+        *) TEST_LOG_OUTPUT_MODE="console"                     ;;
+    esac
+    echo "  -> Test log output : ${TEST_LOG_OUTPUT_MODE}"
+
+    # ---- CSV report -------------------------------------------------- #
+    echo ""
+    printf "  Save results to CSV report? [y/N]: "
+    read -r _CSVOPT
+    case "$_CSVOPT" in
+        y|Y|yes|YES) CSV_REPORT_ENABLE=1 ;;
+        *)           CSV_REPORT_ENABLE=0 ;;
+    esac
+    echo "  -> CSV report : $([ "$CSV_REPORT_ENABLE" -eq 1 ] && echo "enabled" || echo "disabled")"
+
+    # ------------------------------------------------------------------ #
+    # Existing file handling
+    #
+    # For each module, check if a log/CSV file already exists.
+    # Collect all existing files into two lists (log and csv), then ask
+    # once for each type: delete (fresh start) or append (keep history).
+    # ------------------------------------------------------------------ #
+    echo ""
+    echo "  -------------------------------------------------------"
+    echo "  Existing File Handling"
+    echo "  -------------------------------------------------------"
+
+    # Collect existing log files
+    local _EXIST_LOGS=()
+    if [ "$LOG_FILE_ENABLE" -eq 1 ]
+    then
+        local _M
+        for _M in "${_OMODS[@]}"
+        do
+            local _LF="${LOG_DIR}/${_M}.log"
+            [ -s "$_LF" ] && _EXIST_LOGS+=("$_LF")
+        done
+    fi
+
+    # Collect existing CSV files
+    local _EXIST_CSVS=()
+    if [ "$CSV_REPORT_ENABLE" -eq 1 ]
+    then
+        local _M
+        for _M in "${_OMODS[@]}"
+        do
+            local _CF="${CSV_DIR}/${_M}.csv"
+            [ -s "$_CF" ] && _EXIST_CSVS+=("$_CF")
+        done
+    fi
+
+    # Ask about log files
+    if [ "${#_EXIST_LOGS[@]}" -gt 0 ]
+    then
+        echo "  Existing log file(s) found:"
+        local _F
+        for _F in "${_EXIST_LOGS[@]}"
+        do
+            printf "    %s\n" "$_F"
+        done
+        echo "    1. Delete  - start fresh (remove existing log files)"
+        echo "    2. Append  - continue into existing log files (default)"
+        printf "  Choose [1-2, default: 2]: "
+        read -r _LFILE_OPT
+        if [ "$_LFILE_OPT" = "1" ]
+        then
+            for _F in "${_EXIST_LOGS[@]}"
+            do
+                rm -f "$_F"
+                echo "  -> Deleted : $_F"
+            done
+        else
+            echo "  -> Appending to existing log file(s)."
+        fi
+    else
+        if [ "$LOG_FILE_ENABLE" -eq 1 ]
+        then
+            echo "  No existing log files found — new files will be created."
+        else
+            echo "  Log file output disabled — no file action needed."
+        fi
+    fi
+
+    # Ask about CSV files
+    if [ "${#_EXIST_CSVS[@]}" -gt 0 ]
+    then
+        echo ""
+        echo "  Existing CSV file(s) found:"
+        local _F
+        for _F in "${_EXIST_CSVS[@]}"
+        do
+            printf "    %s\n" "$_F"
+        done
+        echo "    1. Delete  - start fresh (remove existing CSV files)"
+        echo "    2. Append  - continue into existing CSV files (default)"
+        printf "  Choose [1-2, default: 2]: "
+        read -r _CSVFILE_OPT
+        if [ "$_CSVFILE_OPT" = "1" ]
+        then
+            for _F in "${_EXIST_CSVS[@]}"
+            do
+                rm -f "$_F"
+                echo "  -> Deleted : $_F"
+            done
+        else
+            echo "  -> Appending to existing CSV file(s)."
+        fi
+    else
+        if [ "$CSV_REPORT_ENABLE" -eq 1 ]
+        then
+            echo ""
+            echo "  No existing CSV files found — new files will be created."
+        else
+            echo ""
+            echo "  CSV report disabled — no file action needed."
+        fi
+    fi
+
+    echo "  -------------------------------------------------------"
+}
+
+###############################################################################
 # interactive_run_module <module>
 #
 # Runs one module once and prints a per-module summary.
@@ -731,6 +907,8 @@ run_selection()
         ask_duration
     fi
 
+    ask_output_options "${_MODS[@]}"
+
     # ------------------------------------------------------------------ #
     # Confirmation prompt — show exactly what will run before committing.
     # ------------------------------------------------------------------ #
@@ -753,6 +931,9 @@ run_selection()
     else
         printf "  Mode      : Single run\n"
     fi
+    printf "  Logger    : %s\n" "$LOGGER_OUTPUT_MODE"
+    printf "  Test log  : %s\n" "$TEST_LOG_OUTPUT_MODE"
+    printf "  CSV       : %s\n" "$([ "$CSV_REPORT_ENABLE" -eq 1 ] && echo "enabled" || echo "disabled")"
     echo "  =========================================================="
     printf "  Proceed? [y/N]: "
     read -r _CONFIRM
